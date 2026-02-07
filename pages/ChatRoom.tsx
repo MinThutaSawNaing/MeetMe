@@ -55,7 +55,11 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, chatId, onBack, apiKey
         // Avoid duplicate messages by checking if message already exists
         const exists = prev.some(msg => msg.id === newMessage.id);
         if (!exists) {
-          return [...prev, newMessage];
+          // Add new message and sort by timestamp to maintain order
+          const updatedMessages = [...prev, newMessage];
+          return updatedMessages.sort((a, b) => 
+            new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+          );
         }
         return prev;
       });

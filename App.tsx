@@ -48,6 +48,12 @@ const App = () => {
     };
     
     initApp();
+    
+    // Cleanup function
+    return () => {
+      // Clean up all real-time subscriptions when app unmounts
+      mockDB.unsubscribeAll();
+    };
   }, []);
 
   const handleLogin = async (username: string) => {
@@ -59,6 +65,9 @@ const App = () => {
   };
 
   const handleLogout = async () => {
+    // Clean up all real-time subscriptions
+    mockDB.unsubscribeAll();
+    
     await mockAuth.signOut();
     setCurrentUser(null);
     setView(ViewState.LOGIN);

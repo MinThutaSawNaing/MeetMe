@@ -1,5 +1,6 @@
 import { supabase, checkSupabaseAvailability, isSupabaseAvailable } from './supabaseClient';
 import { User, Chat, Message, Friend, Story } from '../types';
+import { wsManager } from './websocketService';
 
 // Delay utility function
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -581,7 +582,16 @@ export const supabaseDB = {
           console.log('New message received in real-time:', payload);
           callback(payload.new as Message);
         }
-      );
+      )
+      // Add error handling for the channel
+      .on('broadcast', { event: 'system' }, (payload) => {
+        console.log('System message received:', payload);
+      })
+      .on('presence', { event: 'sync' }, () => {
+        console.log('Presence sync completed');
+      });
+
+    // Supabase real-time channels have built-in error handling
 
     const subscription = channel.subscribe();
     realTimeSubscriptions[`messages-${chatId}`] = channel;
@@ -628,7 +638,11 @@ export const supabaseDB = {
           console.log('New chat created in real-time:', payload);
           supabaseDB.getChats(userId).then(callback);
         }
-      );
+      )
+      // Add system event handling
+      .on('broadcast', { event: 'system' }, (payload) => {
+        console.log('System message received:', payload);
+      });
 
     const subscription = channel.subscribe();
     realTimeSubscriptions[`chats-${userId}`] = channel;

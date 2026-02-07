@@ -158,7 +158,19 @@ const ChatList: React.FC<ChatListProps> = ({ currentUser, onOpenChat, apiKey, on
     
     // Set up real-time subscription for chat updates
     const chatSubscription = mockDB.subscribeToChats(currentUser.id, (updatedChats) => {
-      setChats(updatedChats);
+      setChats(prevChats => {
+        // Update chats with new data while preserving order
+        const updatedChatMap = new Map(updatedChats.map(chat => [chat.id, chat]));
+        const preservedOrder = prevChats.map(prevChat => 
+          updatedChatMap.has(prevChat.id) ? updatedChatMap.get(prevChat.id)! : prevChat
+        );
+        
+        // Add any new chats that weren't in the previous list
+        const existingIds = new Set(preservedOrder.map(chat => chat.id));
+        const newChats = updatedChats.filter(chat => !existingIds.has(chat.id));
+        
+        return [...newChats, ...preservedOrder];
+      });
     });
     
     // Clean up subscription on unmount
