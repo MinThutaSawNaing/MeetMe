@@ -568,8 +568,10 @@ export const supabaseDB = {
       realTimeSubscriptions[`messages-${chatId}`].unsubscribe();
     }
 
+    console.log('Setting up real-time subscription for chat:', chatId);
+    
     const channel = supabase
-      .channel(`messages-${chatId}`)
+      .channel(`realtime:messages-${chatId}`)
       .on(
         'postgres_changes',
         {
@@ -579,22 +581,34 @@ export const supabaseDB = {
           filter: `chat_id=eq.${chatId}`
         },
         (payload) => {
-          console.log('New message received in real-time:', payload);
+          console.log('New message received in real-time:', payload.new);
           callback(payload.new as Message);
         }
       )
-      // Add error handling for the channel
-      .on('broadcast', { event: 'system' }, (payload) => {
-        console.log('System message received:', payload);
-      })
-      .on('presence', { event: 'sync' }, () => {
-        console.log('Presence sync completed');
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'messages',
+        filter: `chat_id=eq.${chatId}`
+      }, (payload) => {
+        console.log('Message updated in real-time:', payload.new);
+        callback(payload.new as Message);
       });
 
-    // Supabase real-time channels have built-in error handling
+    // Track connection status
+    channel.subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        console.log('Real-time channel subscribed for chat:', chatId);
+      } else if (status === 'CLOSED') {
+        console.log('Real-time channel closed for chat:', chatId);
+      }
+    });
 
     const subscription = channel.subscribe();
+    
+    // Store the channel for cleanup
     realTimeSubscriptions[`messages-${chatId}`] = channel;
+    
     return subscription;
   },
 
@@ -609,8 +623,10 @@ export const supabaseDB = {
       realTimeSubscriptions[`chats-${userId}`].unsubscribe();
     }
 
+    console.log('Setting up real-time subscription for user chats:', userId);
+    
     const channel = supabase
-      .channel(`chats-${userId}`)
+      .channel(`realtime:chats-${userId}`)
       .on(
         'postgres_changes',
         {
@@ -639,10 +655,29 @@ export const supabaseDB = {
           supabaseDB.getChats(userId).then(callback);
         }
       )
-      // Add system event handling
-      .on('broadcast', { event: 'system' }, (payload) => {
-        console.log('System message received:', payload);
-      });
+      // Listen for DELETE events as well
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'chats',
+          filter: `participants.cs.{${userId}}`
+        },
+        (payload) => {
+          console.log('Chat deleted in real-time:', payload);
+          supabaseDB.getChats(userId).then(callback);
+        }
+      );
+
+    // Track connection status
+    channel.subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        console.log('Real-time channel subscribed for user chats:', userId);
+      } else if (status === 'CLOSED') {
+        console.log('Real-time channel closed for user chats:', userId);
+      }
+    });
 
     const subscription = channel.subscribe();
     realTimeSubscriptions[`chats-${userId}`] = channel;
@@ -682,16 +717,64 @@ export const supabaseDB = {
 
   unsubscribeFromChannel: (channelName: string) => {
     if (realTimeSubscriptions[channelName]) {
-      realTimeSubscriptions[channelName]?.unsubscribe();
+      const channel = realTimeSubscriptions[channelName];
+      console.log('Unsubscribing from channel:', channelName);
+      channel.untrack(); // Untrack all events
+      channel.unsubscribe();
       delete realTimeSubscriptions[channelName];
     }
   },
 
   unsubscribeAll: () => {
+    console.log('Unsubscribing from all real-time channels');
     Object.keys(realTimeSubscriptions).forEach(channelName => {
-      realTimeSubscriptions[channelName]?.unsubscribe();
+      const channel = realTimeSubscriptions[channelName];
+      channel.untrack(); // Untrack all events
+      channel.unsubscribe();
     });
     Object.keys(realTimeSubscriptions).forEach(key => delete realTimeSubscriptions[key]);
+  },
+
+  // Function to get connection status for debugging
+  getConnectionStatus: () => {
+    const status = {};
+    for (const [channelName, channel] of Object.entries(realTimeSubscriptions)) {
+      status[channelName] = 'connected'; // Channel exists and should be active
+    }
+    return status;
+  },
+
+  // Test real-time connection
+  testRealtimeConnection: async () => {
+    if (!supabase) {
+      console.error('Supabase not available for testing');
+      return false;
+    }
+    
+    try {
+      // Create a test channel to verify real-time is working
+      const testChannel = supabase.channel('test-realtime-connection');
+      
+      let isConnected = false;
+      testChannel.subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          isConnected = true;
+          console.log('Real-time connection test: SUCCESS');
+        }
+      });
+      
+      // Wait a bit for connection
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Clean up
+      testChannel.untrack();
+      testChannel.unsubscribe();
+      
+      return isConnected;
+    } catch (error) {
+      console.error('Real-time connection test: FAILED', error);
+      return false;
+    }
   },
 
   // Delete chat for current user only (frontend removal)

@@ -49,8 +49,11 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, chatId, onBack, apiKey
   }, [chatId]);
   
   useEffect(() => {
+    console.log('Setting up real-time subscription for chat:', chatId);
+    
     // Set up real-time subscription for new messages
     const messageSubscription = mockDB.subscribeToChatMessages(chatId, (newMessage) => {
+      console.log('Received real-time message:', newMessage);
       setMessages(prev => {
         // Avoid duplicate messages by checking if message already exists
         const exists = prev.some(msg => msg.id === newMessage.id);
@@ -67,6 +70,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, chatId, onBack, apiKey
     
     // Clean up subscription on unmount
     return () => {
+      console.log('Cleaning up real-time subscription for chat:', chatId);
       mockDB.unsubscribeFromChannel(`messages-${chatId}`);
     };
   }, [chatId]);

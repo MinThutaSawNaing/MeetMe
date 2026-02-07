@@ -33,6 +33,14 @@ const App = () => {
           initializeGemini(storedKey);
       }
       
+      // Test real-time connection
+      try {
+        const isRealtimeWorking = await mockDB.testRealtimeConnection();
+        console.log('Real-time connection status:', isRealtimeWorking ? 'CONNECTED' : 'NOT CONNECTED');
+      } catch (error) {
+        console.error('Error testing real-time connection:', error);
+      }
+      
       // Simulate splash screen
       await new Promise(resolve => setTimeout(resolve, 1500));
       

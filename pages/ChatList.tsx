@@ -156,8 +156,11 @@ const ChatList: React.FC<ChatListProps> = ({ currentUser, onOpenChat, apiKey, on
   useEffect(() => {
     loadChats();
     
+    console.log('Setting up real-time subscription for user chats:', currentUser.id);
+    
     // Set up real-time subscription for chat updates
     const chatSubscription = mockDB.subscribeToChats(currentUser.id, (updatedChats) => {
+      console.log('Received real-time chat updates:', updatedChats.length);
       setChats(prevChats => {
         // Update chats with new data while preserving order
         const updatedChatMap = new Map(updatedChats.map(chat => [chat.id, chat]));
@@ -175,6 +178,7 @@ const ChatList: React.FC<ChatListProps> = ({ currentUser, onOpenChat, apiKey, on
     
     // Clean up subscription on unmount
     return () => {
+      console.log('Cleaning up real-time subscription for user chats:', currentUser.id);
       mockDB.unsubscribeFromChannel(`chats-${currentUser.id}`);
     };
   }, [currentUser.id]);
