@@ -109,7 +109,7 @@ const App = () => {
       {view === ViewState.SCAN && currentUser && (
           <Scan 
             currentUser={currentUser} 
-            onSuccess={() => setView(ViewState.CONTACTS)}
+            onSuccess={() => setView(ViewState.ADD_FRIEND)}
           />
       )}
 
