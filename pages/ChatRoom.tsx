@@ -51,7 +51,14 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, chatId, onBack, apiKey
   useEffect(() => {
     // Set up real-time subscription for new messages
     const messageSubscription = mockDB.subscribeToChatMessages(chatId, (newMessage) => {
-      setMessages(prev => [...prev, newMessage]);
+      setMessages(prev => {
+        // Avoid duplicate messages by checking if message already exists
+        const exists = prev.some(msg => msg.id === newMessage.id);
+        if (!exists) {
+          return [...prev, newMessage];
+        }
+        return prev;
+      });
     });
     
     // Clean up subscription on unmount
@@ -82,20 +89,23 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, chatId, onBack, apiKey
 
     try {
       // Send to Supabase
-      await mockDB.sendMessage(chatId, currentUser.id, text);
+      const sentMessage = await mockDB.sendMessage(chatId, currentUser.id, text);
       
-      // Refresh to get real ID
-      const msgs = await mockDB.getMessages(chatId);
-      setMessages(msgs);
+      // Update the temp message with the real one from DB
+      setMessages(prev => 
+        prev.map(msg => 
+          msg.id === 'temp' && msg.content === text 
+            ? { ...sentMessage, status: 'sent' } // Use the actual message from DB
+            : msg
+        )
+      );
 
       // If talking to Bot
       if (isBotChat) {
           setIsAiThinking(true);
-          const reply = await chatWithBot([...msgs, tempMsg]);
+          const reply = await chatWithBot([...messages, sentMessage]);
           await mockDB.sendMessage(chatId, 'uid_ai_bot', reply, true);
           setIsAiThinking(false);
-          const msgsAfterBot = await mockDB.getMessages(chatId);
-          setMessages(msgsAfterBot);
       }
     } catch (error) {
       console.error('Error sending message:', error);

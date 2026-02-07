@@ -186,7 +186,57 @@ export const mockDB = {
       stories.unshift(newStory);
       localStorage.setItem(STORAGE_KEYS.STORIES, JSON.stringify(stories));
       return newStory;
+  },
+
+  // Delete chat for current user only (frontend removal)
+  deleteChatForUser: (chatId: string): Promise<void> => {
+    // This is handled in the frontend by filtering out the chat
+    // In a real implementation, you might want to mark the chat as "hidden" for the user
+    console.log(`Chat ${chatId} marked for deletion for current user`);
+    return Promise.resolve();
+  },
+
+  // Completely delete chat for all participants
+  deleteChatCompletely: (chatId: string): Promise<void> => {
+    // Remove chat from storage
+    const chatsStr = localStorage.getItem(STORAGE_KEYS.CHATS) || '[]';
+    let chats: Chat[] = JSON.parse(chatsStr);
+    chats = chats.filter(chat => chat.id !== chatId);
+    localStorage.setItem(STORAGE_KEYS.CHATS, JSON.stringify(chats));
+
+    // Remove all messages for this chat
+    const messagesStr = localStorage.getItem(STORAGE_KEYS.MESSAGES) || '[]';
+    let messages: Message[] = JSON.parse(messagesStr);
+    messages = messages.filter(message => message.chat_id !== chatId);
+    localStorage.setItem(STORAGE_KEYS.MESSAGES, JSON.stringify(messages));
+
+    return Promise.resolve();
+  },
+
+  // Real-time subscription methods
+  subscribeToChatMessages: (chatId: string, callback: (message: Message) => void) => {
+    // In the mock implementation, we'll simulate real-time updates
+    // by listening to local storage changes (though this won't work perfectly in mock)
+    console.log('Mock: Subscribed to messages for chat', chatId);
+    return;
+  },
+
+  subscribeToChats: (userId: string, callback: (chats: Chat[]) => void) => {
+    // In the mock implementation, we'll simulate real-time updates
+    console.log('Mock: Subscribed to chats for user', userId);
+    return;
+  },
+
+  unsubscribeFromChannel: (channelName: string) => {
+    console.log('Mock: Unsubscribed from channel', channelName);
+    return;
+  },
+
+  unsubscribeAll: () => {
+    console.log('Mock: Unsubscribed from all channels');
+    return;
   }
+
 };
 
 export const mockAuth = {

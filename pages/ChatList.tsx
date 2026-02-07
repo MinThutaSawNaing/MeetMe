@@ -14,6 +14,7 @@ interface ChatItemProps {
   chat: Chat;
   currentUser: User;
   onOpenChat: (chatId: string) => void;
+  onDeleteChat: (chatId: string, deleteType: 'forMe' | 'completely') => void;
 }
 
 const getStatusColor = (status?: string) => {
@@ -25,8 +26,9 @@ const getStatusColor = (status?: string) => {
     }
 };
 
-const ChatItem: React.FC<ChatItemProps> = ({ chat, currentUser, onOpenChat }) => {
+const ChatItem: React.FC<ChatItemProps> = ({ chat, currentUser, onOpenChat, onDeleteChat }) => {
     const [otherUser, setOtherUser] = useState<User | null>(null);
+    const [showDeleteMenu, setShowDeleteMenu] = useState(false);
 
     useEffect(() => {
         const fetchUser = async () => {
@@ -42,35 +44,72 @@ const ChatItem: React.FC<ChatItemProps> = ({ chat, currentUser, onOpenChat }) =>
     if (!otherUser) return null;
 
     return (
-        <div 
-            onClick={() => onOpenChat(chat.id)}
-            className="flex items-center gap-4 p-4 hover:bg-dark-surface/50 active:bg-dark-surface transition-colors rounded-2xl cursor-pointer mb-2 mx-2 group border border-transparent hover:border-dark-border"
-        >
-            <div className="relative">
-                <img 
-                    src={otherUser.avatar_url} 
-                    alt={otherUser.username} 
-                    className="w-14 h-14 rounded-full object-cover border-2 border-dark-surface group-hover:border-primary-500/50 transition-colors"
-                />
-                <div className={`absolute bottom-0 right-0 w-3.5 h-3.5 ${getStatusColor(otherUser.status)} border-2 border-dark-bg rounded-full`}></div>
-            </div>
-            <div className="flex-1 min-w-0">
-                <div className="flex justify-between items-baseline mb-1">
-                    <h3 className="font-bold text-white truncate">{otherUser.username}</h3>
-                    <span className="text-[10px] text-gray-500 font-medium">
-                        {new Date(chat.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </span>
+        <div className="relative">
+            <div 
+                onClick={() => onOpenChat(chat.id)}
+                className="flex items-center gap-4 p-4 hover:bg-dark-surface/50 active:bg-dark-surface transition-colors rounded-2xl cursor-pointer mb-2 mx-2 group border border-transparent hover:border-dark-border"
+            >
+                <div className="relative">
+                    <img 
+                        src={otherUser.avatar_url} 
+                        alt={otherUser.username} 
+                        className="w-14 h-14 rounded-full object-cover border-2 border-dark-surface group-hover:border-primary-500/50 transition-colors"
+                    />
+                    <div className={`absolute bottom-0 right-0 w-3.5 h-3.5 ${getStatusColor(otherUser.status)} border-2 border-dark-bg rounded-full`}></div>
                 </div>
-                <div className="flex justify-between items-center">
-                    <p className="text-gray-400 text-sm truncate max-w-[80%]">{chat.last_message}</p>
-                    {/* Fake unread badge for enterprise feel */}
-                    {Math.random() > 0.8 && (
-                        <span className="bg-primary-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center shadow-md shadow-primary-900/50">
-                            {Math.floor(Math.random() * 3) + 1}
+                <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-baseline mb-1">
+                        <h3 className="font-bold text-white truncate">{otherUser.username}</h3>
+                        <span className="text-[10px] text-gray-500 font-medium">
+                            {new Date(chat.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </span>
-                    )}
+                    </div>
+                    <div className="flex justify-between items-center">
+                        <p className="text-gray-400 text-sm truncate max-w-[80%]">{chat.last_message}</p>
+                        {/* Fake unread badge for enterprise feel */}
+                        {Math.random() > 0.8 && (
+                            <span className="bg-primary-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center shadow-md shadow-primary-900/50">
+                                {Math.floor(Math.random() * 3) + 1}
+                            </span>
+                        )}
+                    </div>
                 </div>
+                <button 
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        setShowDeleteMenu(!showDeleteMenu);
+                    }}
+                    className="p-1.5 text-gray-500 hover:text-white rounded-full hover:bg-white/10"
+                >
+                    <Icons.More size={16} />
+                </button>
             </div>
+            
+            {/* Delete menu */}
+            {showDeleteMenu && (
+                <div className="absolute right-4 top-4 mt-12 w-48 bg-dark-surface border border-dark-border rounded-xl shadow-2xl overflow-hidden z-10 animate-pop">
+                    <button 
+                        onClick={() => {
+                            onDeleteChat(chat.id, 'forMe');
+                            setShowDeleteMenu(false);
+                        }}
+                        className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 flex items-center gap-2 text-orange-400 border-b border-dark-border"
+                    >
+                        <Icons.Trash2 size={16} />
+                        Delete for me
+                    </button>
+                    <button 
+                        onClick={() => {
+                            onDeleteChat(chat.id, 'completely');
+                            setShowDeleteMenu(false);
+                        }}
+                        className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 flex items-center gap-2 text-red-400"
+                    >
+                        <Icons.AlertTriangle size={16} />
+                        Complete delete
+                    </button>
+                </div>
+            )}
         </div>
     );
 };
@@ -96,11 +135,31 @@ const ChatList: React.FC<ChatListProps> = ({ currentUser, onOpenChat, apiKey, on
     }
   };
 
+  const handleDeleteChat = async (chatId: string, deleteType: 'forMe' | 'completely') => {
+    try {
+      if (deleteType === 'forMe') {
+        // For now, just remove from local state (in real app, would mark as hidden)
+        setChats(prev => prev.filter(chat => chat.id !== chatId));
+        await mockDB.deleteChatForUser(chatId);
+      } else {
+        // Completely remove from database
+        await mockDB.deleteChatCompletely(chatId);
+        // Refresh chat list
+        loadChats();
+      }
+    } catch (error) {
+      console.error('Error deleting chat:', error);
+      alert('Failed to delete chat. Please try again.');
+    }
+  };
+
   useEffect(() => {
     loadChats();
     
     // Set up real-time subscription for chat updates
-    const chatSubscription = mockDB.subscribeToChats(currentUser.id, setChats);
+    const chatSubscription = mockDB.subscribeToChats(currentUser.id, (updatedChats) => {
+      setChats(updatedChats);
+    });
     
     // Clean up subscription on unmount
     return () => {
@@ -220,7 +279,7 @@ const ChatList: React.FC<ChatListProps> = ({ currentUser, onOpenChat, apiKey, on
             <p className="text-sm font-medium">No active conversations found.</p>
           </div>
         ) : (
-          filteredChats.map(chat => <ChatItem key={chat.id} chat={chat} currentUser={currentUser} onOpenChat={onOpenChat} />)
+          filteredChats.map(chat => <ChatItem key={chat.id} chat={chat} currentUser={currentUser} onOpenChat={onOpenChat} onDeleteChat={handleDeleteChat} />)
         )}
       </div>
     </div>

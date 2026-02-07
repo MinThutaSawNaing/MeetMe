@@ -26,7 +26,9 @@ import {
   LogOut,
   ChevronDown,
   CircleFadingPlus,
-  Aperture
+  Aperture,
+  Trash2,
+  AlertTriangle
 } from 'lucide-react';
 
 export const Icons = {
@@ -56,5 +58,7 @@ export const Icons = {
   LogOut: LogOut,
   ChevronDown: ChevronDown,
   Story: CircleFadingPlus,
-  Aperture: Aperture
+  Aperture: Aperture,
+  Trash2: Trash2,
+  AlertTriangle: AlertTriangle
 };

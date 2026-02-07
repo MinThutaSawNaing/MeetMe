@@ -158,13 +158,17 @@ export const supabaseDB = {
       }
 
       // Update the chat's last message and updated_at timestamp
-      await supabase
+      const { error: updateError } = await supabase
         .from('chats')
         .update({
           last_message: content,
           updated_at: new Date().toISOString()
         })
         .eq('id', chatId);
+      
+      if (updateError) {
+        console.error('Error updating chat after sending message:', updateError);
+      }
 
       return data as Message;
     } catch (error) {
@@ -574,6 +578,7 @@ export const supabaseDB = {
           filter: `chat_id=eq.${chatId}`
         },
         (payload) => {
+          console.log('New message received in real-time:', payload);
           callback(payload.new as Message);
         }
       );
@@ -604,8 +609,23 @@ export const supabaseDB = {
           table: 'chats',
           filter: `participants.cs.{${userId}}`
         },
-        () => {
+        (payload) => {
           // Refresh chats when there's an update
+          console.log('Chat updated in real-time:', payload);
+          supabaseDB.getChats(userId).then(callback);
+        }
+      )
+      // Also listen for INSERT events for new chats
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'chats',
+          filter: `participants.cs.{${userId}}`
+        },
+        (payload) => {
+          console.log('New chat created in real-time:', payload);
           supabaseDB.getChats(userId).then(callback);
         }
       );
@@ -658,6 +678,41 @@ export const supabaseDB = {
       realTimeSubscriptions[channelName]?.unsubscribe();
     });
     Object.keys(realTimeSubscriptions).forEach(key => delete realTimeSubscriptions[key]);
+  },
+
+  // Delete chat for current user only (frontend removal)
+  deleteChatForUser: (chatId: string): Promise<void> => {
+    // This is handled in the frontend by filtering out the chat
+    // In a real implementation, you might want to mark the chat as "hidden" for the user
+    console.log(`Chat ${chatId} marked for deletion for current user`);
+    return Promise.resolve();
+  },
+
+  // Completely delete chat for all participants
+  deleteChatCompletely: async (chatId: string): Promise<void> => {
+    checkSupabaseAvailability();
+    
+    if (!supabase) {
+      console.warn('Supabase not available, simulating chat deletion');
+      return;
+    }
+
+    try {
+      // Delete all messages associated with the chat (due to CASCADE)
+      // and the chat itself
+      const { error } = await supabase
+        .from('chats')
+        .delete()
+        .eq('id', chatId);
+
+      if (error) {
+        console.error('Error deleting chat:', error);
+        throw error;
+      }
+    } catch (error) {
+      console.error('Error in deleteChatCompletely:', error);
+      throw error;
+    }
   }
 };
 

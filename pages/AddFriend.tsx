@@ -125,7 +125,7 @@ const AddFriend: React.FC<AddFriendProps> = ({ currentUser, onBack }) => {
         const codeReader = new BrowserMultiFormatReader();
         
         const decode = async () => {
-          if (!videoRef.current) return;
+          if (!videoRef.current || !scanningRef.current) return;
           
           try {
             const result = await codeReader.decodeFromVideoElement(videoRef.current);
@@ -140,7 +140,12 @@ const AddFriend: React.FC<AddFriendProps> = ({ currentUser, onBack }) => {
             }
             // Continue scanning if it's just not found
             if (!scannedData && scanningRef.current) {
-              requestAnimationFrame(decode);
+              // Add a small delay to reduce CPU usage
+              setTimeout(() => {
+                if (scanningRef.current && videoRef.current) {
+                  decode();
+                }
+              }, 100);
             }
           }
         };
@@ -159,16 +164,16 @@ const AddFriend: React.FC<AddFriendProps> = ({ currentUser, onBack }) => {
   React.useEffect(() => {
     if (showScanner && videoRef.current) {
       initScanner();
-      
-      // Cleanup function
-      return () => {
-        scanningRef.current = false;
-        if (videoRef.current && videoRef.current.srcObject) {
-          const tracks = (videoRef.current.srcObject as MediaStream).getTracks();
-          tracks.forEach(track => track.stop());
-        }
-      };
     }
+    
+    // Cleanup function
+    return () => {
+      scanningRef.current = false;
+      if (videoRef.current && videoRef.current.srcObject) {
+        const tracks = (videoRef.current.srcObject as MediaStream).getTracks();
+        tracks.forEach(track => track.stop());
+      }
+    };
   }, [showScanner]);
 
   const handleError = (err: any) => {
