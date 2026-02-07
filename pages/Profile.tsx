@@ -17,9 +17,12 @@ const Profile: React.FC<ProfileProps> = ({ currentUser, onLogout, apiKey, setApi
   const [showKeyInput, setShowKeyInput] = useState(false);
   const [tempApiKey, setTempApiKey] = useState(apiKey);
   const [status, setStatus] = useState<User['status']>(currentUser.status || 'online');
+  const [isSaving, setIsSaving] = useState(false);
 
   const handleSave = async () => {
-    // Update user profile in database
+    if (isSaving) return;
+    
+    setIsSaving(true);
     try {
       if (!mockDB) {
         console.error('Supabase not available');
@@ -40,6 +43,8 @@ const Profile: React.FC<ProfileProps> = ({ currentUser, onLogout, apiKey, setApi
     } catch (err) {
       console.error('Error updating user profile:', err);
       alert('Failed to update profile');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -54,9 +59,6 @@ const Profile: React.FC<ProfileProps> = ({ currentUser, onLogout, apiKey, setApi
       // Revert to previous status
       setStatus(currentUser.status || 'online');
     }
-    
-    // In a real app, we would subscribe to status changes
-    // Here we just update the local state
   };
 
   const saveApiKey = () => {
@@ -64,130 +66,210 @@ const Profile: React.FC<ProfileProps> = ({ currentUser, onLogout, apiKey, setApi
     setShowKeyInput(false);
   };
 
-  return (
-    <div className="flex flex-col h-full pt-6 pb-20">
-      <header className="px-6 mb-4 flex items-center gap-4">
-        <button 
-          onClick={() => setEditing(!editing)}
-          className="p-2 hover:bg-white/10 rounded-full transition-colors text-gray-400 hover:text-white"
-        >
-          <Icons.Settings size={24} />
-        </button>
-        <h1 className="text-2xl font-bold tracking-tight text-white">Profile</h1>
-      </header>
+  const getStatusColor = (statusValue: string) => {
+    switch(statusValue) {
+      case 'online': return 'from-green-500 to-emerald-400';
+      case 'busy': return 'from-red-500 to-orange-400';
+      case 'away': return 'from-yellow-500 to-amber-400';
+      default: return 'from-gray-500 to-gray-400';
+    }
+  };
 
-      <div className="flex-1 overflow-y-auto no-scrollbar px-6">
-        <div className="flex flex-col items-center mb-8">
-          <div className="relative mb-4">
-            <img 
-              src={currentUser.avatar_url} 
-              alt={currentUser.username} 
-              className="w-24 h-24 rounded-full object-cover border-4 border-dark-surface"
-            />
-            <div className={`absolute bottom-2 right-2 w-6 h-6 rounded-full border-2 border-dark-surface ${status === 'online' ? 'bg-green-500' : status === 'busy' ? 'bg-red-500' : status === 'away' ? 'bg-yellow-500' : 'bg-gray-500'}`}></div>
+  const getStatusBg = (statusValue: string) => {
+    switch(statusValue) {
+      case 'online': return 'bg-green-500/20 border-green-500/30';
+      case 'busy': return 'bg-red-500/20 border-red-500/30';
+      case 'away': return 'bg-yellow-500/20 border-yellow-500/30';
+      default: return 'bg-gray-500/20 border-gray-500/30';
+    }
+  };
+
+  return (
+    <div className="flex flex-col h-full pt-6 pb-20 bg-gradient-to-br from-dark-bg to-dark-surface">
+      {/* Header with glass effect */}
+      <div className="px-6 mb-6">
+        <div className="backdrop-blur-xl bg-dark-surface/40 border border-dark-border/50 rounded-2xl p-4 shadow-2xl">
+          <div className="flex items-center justify-between">
+            <h1 className="text-2xl font-bold bg-gradient-to-r from-primary-400 to-cyan-400 bg-clip-text text-transparent">
+              Profile
+            </h1>
+            <button 
+              onClick={() => setEditing(!editing)}
+              className="p-3 bg-dark-bg/50 hover:bg-dark-bg/70 border border-dark-border/50 rounded-xl transition-all duration-300 hover:scale-105 active:scale-95 backdrop-blur-sm"
+              disabled={isSaving}
+            >
+              <Icons.Settings size={22} className="text-primary-400" />
+            </button>
           </div>
-          
-          {editing ? (
-            <input
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              className="text-center text-xl font-bold bg-transparent border-b border-gray-600 text-white focus:outline-none focus:border-primary-500"
-            />
-          ) : (
-            <h2 className="text-xl font-bold text-white">{username}</h2>
-          )}
-          
-          <div className="flex items-center gap-2 mt-2">
-            {editing ? (
-              <input
-                type="text"
-                value={jobTitle}
-                onChange={(e) => setJobTitle(e.target.value)}
-                placeholder="Job title"
-                className="text-center text-gray-400 bg-transparent border-b border-gray-600 focus:outline-none focus:border-primary-500"
-              />
-            ) : (
-              <p className="text-gray-400">{jobTitle || 'Team Member'}</p>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto no-scrollbar px-6 space-y-6">
+        {/* User Profile Card */}
+        <div className="backdrop-blur-xl bg-dark-surface/30 border border-dark-border/50 rounded-3xl p-6 shadow-2xl">
+          <div className="flex flex-col items-center">
+            {/* Avatar with enhanced status indicator */}
+            <div className="relative mb-6 group">
+              <div className="absolute -inset-2 bg-gradient-to-r from-primary-500/20 to-cyan-500/20 rounded-full blur-xl group-hover:blur-2xl transition-all duration-500"></div>
+              <div className="relative">
+                <img 
+                  src={currentUser.avatar_url} 
+                  alt={currentUser.username} 
+                  className="w-28 h-28 rounded-full object-cover border-4 border-white/10 shadow-2xl"
+                />
+                <div className={`absolute bottom-2 right-2 w-8 h-8 rounded-full border-3 border-dark-bg bg-gradient-to-br ${getStatusColor(status)} shadow-lg flex items-center justify-center`}>
+                  <div className="w-2 h-2 rounded-full bg-white"></div>
+                </div>
+              </div>
+            </div>
+            
+            {/* Username */}
+            <div className="text-center mb-2">
+              {editing ? (
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className="text-2xl font-bold text-center bg-transparent border-b-2 border-primary-500/50 text-white focus:outline-none focus:border-primary-400 transition-colors px-2 py-1 w-full max-w-[200px]"
+                  autoFocus
+                />
+              ) : (
+                <h2 className="text-2xl font-bold text-white group-hover:text-primary-300 transition-colors">
+                  {username}
+                </h2>
+              )}
+            </div>
+            
+            {/* Job Title */}
+            <div className="text-center mb-6">
+              {editing ? (
+                <input
+                  type="text"
+                  value={jobTitle}
+                  onChange={(e) => setJobTitle(e.target.value)}
+                  placeholder="Job title"
+                  className="text-gray-400 text-center bg-transparent border-b border-gray-600/50 focus:outline-none focus:border-primary-400 transition-colors px-2 py-1 w-full max-w-[180px]"
+                />
+              ) : (
+                <p className="text-gray-400 text-lg">{jobTitle || 'Team Member'}</p>
+              )}
+            </div>
+
+            {/* Status Selection */}
+            {editing && (
+              <div className="w-full">
+                <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-4 text-center">
+                  Status
+                </h3>
+                <div className="grid grid-cols-2 gap-3">
+                  {(['online', 'busy', 'away', 'offline'] as User['status'][]).map(stat => (
+                    <button
+                      key={stat}
+                      onClick={() => handleStatusChange(stat)}
+                      className={`py-3 px-4 rounded-2xl text-sm font-semibold capitalize transition-all duration-300 transform hover:scale-105 active:scale-95 border-2 ${
+                        status === stat 
+                          ? `bg-gradient-to-r ${getStatusColor(stat)} text-white shadow-lg shadow-${stat === 'online' ? 'green' : stat === 'busy' ? 'red' : stat === 'away' ? 'yellow' : 'gray'}-500/30`
+                          : 'bg-dark-bg/50 border-dark-border/50 text-gray-300 hover:text-white hover:border-primary-500/50'
+                      }`}
+                    >
+                      {stat}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Save Button */}
+            {editing && (
+              <button
+                onClick={handleSave}
+                disabled={isSaving}
+                className="mt-6 w-full py-3 bg-gradient-to-r from-primary-600 to-cyan-600 hover:from-primary-500 hover:to-cyan-500 text-white font-bold rounded-2xl shadow-lg shadow-primary-500/30 hover:shadow-xl transition-all duration-300 transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+              >
+                {isSaving ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    <span>Saving...</span>
+                  </div>
+                ) : (
+                  'Save Changes'
+                )}
+              </button>
             )}
           </div>
         </div>
 
-        {editing && (
-          <div className="mb-6">
-            <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">Status</h3>
-            <div className="grid grid-cols-4 gap-2">
-              {(['online', 'busy', 'away', 'offline'] as User['status'][]).map(stat => (
-                <button
-                  key={stat}
-                  onClick={() => handleStatusChange(stat)}
-                  className={`py-2 px-3 rounded-xl text-sm font-medium capitalize ${
-                    status === stat 
-                      ? 'bg-primary-600 text-white' 
-                      : 'bg-dark-surface text-gray-400 hover:text-white'
-                  }`}
-                >
-                  {stat}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
+        {/* Action Cards */}
         <div className="space-y-4">
+          {/* AI Integration Card */}
           <div 
-            className="p-4 bg-dark-surface rounded-2xl border border-dark-border"
+            className="backdrop-blur-xl bg-dark-surface/30 border border-dark-border/50 rounded-2xl p-5 shadow-xl hover:shadow-2xl transition-all duration-300 hover:bg-dark-surface/40 cursor-pointer group"
             onClick={() => setShowKeyInput(!showKeyInput)}
           >
             <div className="flex justify-between items-center">
-              <div>
-                <h3 className="font-bold text-white">AI Integration</h3>
-                <p className="text-gray-400 text-sm">Configure Gemini API for smart features</p>
+              <div className="flex-1">
+                <div className="flex items-center gap-3 mb-1">
+                  <div className="p-2 bg-gradient-to-br from-purple-500/20 to-pink-500/20 rounded-xl">
+                    <Icons.Bot size={20} className="text-purple-400" />
+                  </div>
+                  <h3 className="font-bold text-white text-lg">AI Integration</h3>
+                </div>
+                <p className="text-gray-400 text-sm ml-11">Configure Gemini API for smart features</p>
               </div>
-              <div className="p-2 bg-primary-600/10 text-primary-500 rounded-xl">
-                <Icons.Bot size={20} />
+              <div className="p-2 bg-gradient-to-br from-purple-500/10 to-pink-500/10 rounded-xl group-hover:rotate-12 transition-transform duration-300">
+                <Icons.Sparkles size={18} className="text-purple-400" />
               </div>
             </div>
           </div>
 
+          {/* API Key Input */}
           {showKeyInput && (
-            <div className="p-4 bg-dark-surface rounded-2xl border border-dark-border">
-              <h3 className="font-bold text-white mb-3">API Key</h3>
+            <div className="backdrop-blur-xl bg-dark-surface/40 border border-dark-border/50 rounded-2xl p-5 shadow-xl animate-in slide-in-from-top-4 duration-300">
+              <h3 className="font-bold text-white text-lg mb-4 flex items-center gap-2">
+                <Icons.Settings size={20} className="text-yellow-400" />
+                API Key Configuration
+              </h3>
               <input
                 type="password"
                 value={tempApiKey}
                 onChange={(e) => setTempApiKey(e.target.value)}
-                placeholder="Enter Gemini API key"
-                className="w-full bg-dark-bg border border-dark-border rounded-xl p-3 mb-3 focus:outline-none focus:border-primary-500 text-sm"
+                placeholder="Enter your Gemini API key"
+                className="w-full bg-dark-bg/50 border border-dark-border/50 rounded-xl p-4 mb-4 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 text-white placeholder-gray-500 transition-all duration-300"
               />
-              <div className="flex gap-2">
+              <div className="flex gap-3">
                 <button 
                   onClick={() => setShowKeyInput(false)}
-                  className="flex-1 py-2 text-gray-400 hover:text-white font-medium text-sm"
+                  className="flex-1 py-3 bg-dark-bg/50 hover:bg-dark-bg/70 text-gray-300 hover:text-white font-medium rounded-xl border border-dark-border/50 hover:border-gray-500 transition-all duration-300"
                 >
                   Cancel
                 </button>
                 <button 
                   onClick={saveApiKey}
-                  className="flex-1 bg-primary-600 rounded-xl py-2 font-bold hover:bg-primary-500 text-white text-sm"
+                  className="flex-1 py-3 bg-gradient-to-r from-yellow-600 to-amber-600 hover:from-yellow-500 hover:to-amber-500 text-white font-bold rounded-xl shadow-lg shadow-yellow-500/20 hover:shadow-xl transition-all duration-300 transform hover:scale-105 active:scale-95"
                 >
-                  Save
+                  Save Key
                 </button>
               </div>
             </div>
           )}
 
+          {/* Logout Card */}
           <div 
-            className="p-4 bg-dark-surface rounded-2xl border border-dark-border"
+            className="backdrop-blur-xl bg-dark-surface/30 border border-red-500/20 rounded-2xl p-5 shadow-xl hover:shadow-2xl transition-all duration-300 hover:bg-red-500/5 hover:border-red-500/40 cursor-pointer group"
             onClick={onLogout}
           >
             <div className="flex justify-between items-center">
-              <div>
-                <h3 className="font-bold text-white">Log Out</h3>
-                <p className="text-gray-400 text-sm">End your session</p>
+              <div className="flex-1">
+                <div className="flex items-center gap-3 mb-1">
+                  <div className="p-2 bg-gradient-to-br from-red-500/20 to-orange-500/20 rounded-xl">
+                    <Icons.LogOut size={20} className="text-red-400" />
+                  </div>
+                  <h3 className="font-bold text-white text-lg">Log Out</h3>
+                </div>
+                <p className="text-gray-400 text-sm ml-11">End your session securely</p>
               </div>
-              <div className="p-2 bg-red-600/10 text-red-500 rounded-xl">
-                <Icons.LogOut size={20} />
+              <div className="p-2 bg-gradient-to-br from-red-500/10 to-orange-500/10 rounded-xl group-hover:rotate-12 transition-transform duration-300">
+                <Icons.ChevronDown size={18} className="text-red-400 rotate-90" />
               </div>
             </div>
           </div>
