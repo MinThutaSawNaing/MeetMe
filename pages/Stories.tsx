@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { User, Story } from '../types';
 import { supabaseDB as mockDB } from '../services/supabaseService';
 import { Icons } from '../components/Icon';
@@ -10,6 +10,10 @@ interface StoriesProps {
 const Stories: React.FC<StoriesProps> = ({ currentUser }) => {
   const [stories, setStories] = useState<Story[]>([]);
   const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [showUploadForm, setShowUploadForm] = useState(false);
+  const [caption, setCaption] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const loadStories = async () => {
@@ -33,34 +37,178 @@ const Stories: React.FC<StoriesProps> = ({ currentUser }) => {
     return () => clearInterval(interval);
   }, []);
 
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    try {
+      // Upload the story using the new method
+      const uploadedStory = await mockDB.uploadStory(currentUser.id, file, caption);
+      
+      // Add the new story to the list
+      setStories(prev => [uploadedStory, ...prev]);
+      
+      // Reset form
+      setCaption('');
+      setShowUploadForm(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    } catch (error: any) {
+      console.error('Error uploading story:', error);
+      alert(error.message || 'Failed to upload story. Please try again.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleUploadClick = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
   return (
     <div className="flex flex-col h-full pt-6 pb-20">
-      <header className="px-6 mb-4">
-        <h1 className="text-2xl font-bold tracking-tight text-white">Stories</h1>
+      <header className="px-6 mb-4 flex justify-between items-center">
+        <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-primary-400 to-cyan-400 bg-clip-text text-transparent">
+          Stories
+        </h1>
+        <button
+          onClick={() => setShowUploadForm(!showUploadForm)}
+          className="p-3 bg-gradient-to-r from-primary-600 to-cyan-600 hover:from-primary-500 hover:to-cyan-500 rounded-2xl shadow-lg shadow-primary-500/20 hover:shadow-xl transition-all duration-300 transform hover:scale-105 active:scale-95"
+        >
+          <Icons.Story size={24} />
+        </button>
       </header>
+
+      {/* Upload Form */}
+      {showUploadForm && (
+        <div className="px-6 mb-6 animate-in slide-in-from-top-4 duration-300">
+          <div className="backdrop-blur-xl bg-dark-surface/40 border border-dark-border/50 rounded-2xl p-5 shadow-xl">
+            <div className="flex items-center gap-4 mb-4">
+              <div className="relative">
+                <img 
+                  src={currentUser.avatar_url} 
+                  className="w-12 h-12 rounded-full object-cover border-2 border-primary-500" 
+                  alt={currentUser.username} 
+                />
+                <div className="absolute bottom-0 right-0 w-4 h-4 rounded-full bg-green-500 border-2 border-dark-surface"></div>
+              </div>
+              <h3 className="font-bold text-white">{currentUser.username}</h3>
+            </div>
+            
+            <div className="space-y-4">
+              <div 
+                onClick={handleUploadClick}
+                className="border-2 border-dashed border-dark-border/50 rounded-2xl p-8 text-center cursor-pointer hover:border-primary-500/50 transition-colors bg-dark-bg/30 hover:bg-dark-bg/50"
+              >
+                <div className="flex flex-col items-center justify-center gap-3">
+                  <Icons.Camera size={32} className="text-primary-400" />
+                  <p className="text-white font-medium">Tap to upload photo/video</p>
+                  <p className="text-gray-400 text-sm">Max 4MB for images, 14MB for videos</p>
+                </div>
+              </div>
+              
+              <input
+                type="file"
+                ref={fileInputRef}
+                accept="image/*,video/*"
+                onChange={handleFileChange}
+                className="hidden"
+              />
+              
+              <textarea
+                value={caption}
+                onChange={(e) => setCaption(e.target.value)}
+                placeholder="Add a caption..."
+                className="w-full bg-dark-bg/50 border border-dark-border/50 rounded-xl p-4 text-white placeholder-gray-500 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all resize-none"
+                rows={3}
+              />
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowUploadForm(false);
+                    setCaption('');
+                    if (fileInputRef.current) {
+                      fileInputRef.current.value = '';
+                    }
+                  }}
+                  className="flex-1 py-3 bg-dark-bg/50 hover:bg-dark-bg/70 text-gray-300 hover:text-white font-medium rounded-xl border border-dark-border/50 hover:border-gray-500 transition-all duration-300"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleUploadClick}
+                  disabled={uploading}
+                  className="flex-1 py-3 bg-gradient-to-r from-primary-600 to-cyan-600 hover:from-primary-500 hover:to-cyan-500 text-white font-bold rounded-xl shadow-lg shadow-primary-500/20 hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {uploading ? (
+                    <div className="flex items-center justify-center gap-2">
+                      <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                      <span>Uploading...</span>
+                    </div>
+                  ) : (
+                    'Share Story'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto no-scrollbar px-6">
         {loading ? (
-          <div className="flex justify-center p-10"><div className="w-6 h-6 border-2 border-primary-500 border-t-transparent rounded-full animate-spin"></div></div>
+          <div className="flex justify-center p-10">
+            <div className="w-6 h-6 border-2 border-primary-500 border-t-transparent rounded-full animate-spin"></div>
+          </div>
         ) : stories.length === 0 ? (
           <div className="text-center p-10 opacity-50 flex flex-col items-center">
             <div className="bg-dark-surface p-4 rounded-full mb-4">
               <Icons.Story size={32} className="text-gray-600" />
             </div>
             <p className="text-sm font-medium">No stories yet.</p>
+            <p className="text-gray-500 text-xs mt-2">Share your first moment!</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-4">
             {stories.map(story => (
               <div 
                 key={story.id}
-                className="aspect-[9/16] rounded-3xl overflow-hidden bg-dark-surface border border-dark-border relative group cursor-pointer"
+                className="aspect-[9/16] rounded-3xl overflow-hidden bg-dark-surface border border-dark-border relative group cursor-pointer hover:scale-[1.02] transition-transform duration-300"
               >
-                <img 
-                  src={story.image_url} 
-                  alt={story.caption || 'Story'} 
-                  className="w-full h-full object-cover"
-                />
+                {/\.(mp4|mov|avi|webm|mkv)$/i.test(story.image_url) ? (
+                  <video 
+                    src={story.image_url} 
+                    autoPlay 
+                    muted 
+                    loop 
+                    playsInline
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      const target = e.target as HTMLVideoElement;
+                      // Fallback to image if video fails
+                      target.style.display = 'none';
+                      const img = document.createElement('img');
+                      img.src = 'https://placehold.co/600x800/1a1a1a/333333?text=Video+Error';
+                      img.className = 'w-full h-full object-cover';
+                      target.parentNode?.appendChild(img);
+                    }}
+                  />
+                ) : (
+                  <img 
+                    src={story.image_url} 
+                    alt={story.caption || 'Story'} 
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.src = 'https://placehold.co/600x800/1a1a1a/333333?text=Media+Error';
+                    }}
+                  />
+                )}
                 <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent">
                   <div className="flex items-center gap-2 mb-2">
                     {story.user_data?.avatar_url && (

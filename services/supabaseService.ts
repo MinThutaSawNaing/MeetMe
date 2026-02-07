@@ -389,6 +389,9 @@ export const supabaseDB = {
     }
 
     try {
+      // Clean up expired stories (older than 24 hours) before fetching
+      await cleanupExpiredStories();
+      
       const { data, error } = await supabase
         .from('stories')
         .select('*')
@@ -464,6 +467,86 @@ export const supabaseDB = {
       return data as Story;
     } catch (error) {
       console.error('Error in addStory:', error);
+      throw error;
+    }
+  },
+
+  uploadStory: async (userId: string, file: File, caption?: string): Promise<Story> => {
+    checkSupabaseAvailability();
+    
+    if (!supabase) {
+      console.warn('Supabase not available, simulating story upload');
+      return {
+        id: `temp_story_${Date.now()}`,
+        user_id: userId,
+        image_url: URL.createObjectURL(file),
+        created_at: new Date().toISOString(),
+        caption
+      };
+    }
+
+    // Validate file size
+    const isImage = file.type.startsWith('image/');
+    const isVideo = file.type.startsWith('video/');
+    
+    if (!isImage && !isVideo) {
+      throw new Error('Unsupported file type. Please upload an image or video.');
+    }
+
+    if (isImage && file.size > 4 * 1024 * 1024) { // 4MB limit for images
+      throw new Error('Image file size exceeds 4MB limit');
+    }
+
+    if (isVideo && file.size > 14 * 1024 * 1024) { // 14MB limit for videos
+      throw new Error('Video file size exceeds 14MB limit');
+    }
+
+    try {
+      // Upload file to Supabase Storage
+      const fileName = `${userId}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('stories')
+        .upload(fileName, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (uploadError) {
+        console.error('Error uploading story file:', uploadError);
+        throw uploadError;
+      }
+
+      // Get the public URL for the uploaded file
+      const { data: { publicUrl } } = supabase.storage
+        .from('stories')
+        .getPublicUrl(fileName);
+
+      // Create story record in the database
+      const newStory: Omit<Story, 'id'> = {
+        user_id: userId,
+        image_url: publicUrl,
+        created_at: new Date().toISOString(),
+        caption
+      };
+
+      const { data: storyData, error: storyError } = await supabase
+        .from('stories')
+        .insert([newStory])
+        .select()
+        .single();
+
+      if (storyError) {
+        console.error('Error adding story to database:', storyError);
+        // Clean up the uploaded file if database insertion fails
+        await supabase.storage
+          .from('stories')
+          .remove([fileName]);
+        throw storyError;
+      }
+
+      return storyData as Story;
+    } catch (error) {
+      console.error('Error in uploadStory:', error);
       throw error;
     }
   },
@@ -700,3 +783,69 @@ export const supabaseAuth = {
     return null;
   }
 };
+
+// Helper function to clean up expired stories (older than 24 hours)
+const cleanupExpiredStories = async (): Promise<void> => {
+  checkSupabaseAvailability();
+  
+  if (!supabase) {
+    console.warn('Supabase not available, skipping story cleanup');
+    return;
+  }
+
+  try {
+    // Calculate the date 24 hours ago
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    
+    // Get stories older than 24 hours
+    const { data: expiredStories, error: fetchError } = await supabase
+      .from('stories')
+      .select('id, image_url')
+      .lt('created_at', twentyFourHoursAgo);
+
+    if (fetchError) {
+      console.error('Error fetching expired stories:', fetchError);
+      return;
+    }
+
+    if (expiredStories && expiredStories.length > 0) {
+      // Extract file paths to delete from storage
+      const filePaths = expiredStories.map(story => {
+        // Extract the path from the URL assuming it follows the format we set in uploadStory
+        try {
+          const url = new URL(story.image_url);
+          const pathParts = url.pathname.split('/');
+          // Assuming the storage bucket path is in the format: /storage/v1/object/public/stories/userId/timestamp-filename
+          return `stories/${pathParts[pathParts.length - 1]}`;
+        } catch {
+          return null;
+        }
+      }).filter(Boolean) as string[];
+      
+      // Delete files from storage if any
+      if (filePaths.length > 0) {
+        await supabase.storage
+          .from('stories')
+          .remove(filePaths);
+      }
+      
+      // Delete expired stories from the database
+      const expiredIds = expiredStories.map(story => story.id);
+      const { error: deleteError } = await supabase
+        .from('stories')
+        .delete()
+        .in('id', expiredIds);
+
+      if (deleteError) {
+        console.error('Error deleting expired stories:', deleteError);
+      } else {
+        console.log(`Cleaned up ${expiredIds.length} expired stories`);
+      }
+    }
+  } catch (error) {
+    console.error('Error in cleanupExpiredStories:', error);
+  }
+};
+
+// Export the cleanup function separately
+export { cleanupExpiredStories };
