@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { User, Friend } from '../types';
 import { supabaseDB as mockDB } from '../services/supabaseService';
 import { Icons } from '../components/Icon';
-import { QrScanner } from 'react-qr-scanner';
+// Import for QR scanning functionality
+// We'll implement it directly using the ZXing library
 
 interface AddFriendProps {
   currentUser: User;
@@ -18,6 +19,8 @@ const AddFriend: React.FC<AddFriendProps> = ({ currentUser, onBack }) => {
   const [showScanner, setShowScanner] = useState(false);
   const [scannedData, setScannedData] = useState<string | null>(null);
   const [scannerError, setScannerError] = useState<string | null>(null);
+  const videoRef = React.useRef<HTMLVideoElement>(null);
+  const scanningRef = React.useRef<boolean>(false);
 
   const loadUsers = async () => {
     try {
@@ -100,6 +103,74 @@ const AddFriend: React.FC<AddFriendProps> = ({ currentUser, onBack }) => {
     }
   };
 
+  const initScanner = async () => {
+    if (!videoRef.current || scanningRef.current) return;
+    
+    scanningRef.current = true;
+    
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' } // Use back camera
+      });
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        
+        // Start video playback
+        await videoRef.current.play();
+        
+        // Load ZXing library dynamically
+        const { BrowserMultiFormatReader, NotFoundException } = await import('@zxing/library');
+        
+        const codeReader = new BrowserMultiFormatReader();
+        
+        const decode = async () => {
+          if (!videoRef.current) return;
+          
+          try {
+            const result = await codeReader.decodeFromVideoElement(videoRef.current);
+            if (result && !scannedData) {
+              handleScan(result.getText());
+              // Stop the stream after successful scan
+              stream.getTracks().forEach(track => track.stop());
+            }
+          } catch (err) {
+            if (!(err instanceof NotFoundException)) {
+              console.error('QR decoding error:', err);
+            }
+            // Continue scanning if it's just not found
+            if (!scannedData && scanningRef.current) {
+              requestAnimationFrame(decode);
+            }
+          }
+        };
+        
+        // Start the continuous scanning
+        decode();
+        
+      }
+    } catch (err) {
+      console.error('Error accessing camera:', err);
+      setScannerError('Camera access denied. Please allow camera permissions to scan QR codes.');
+      scanningRef.current = false;
+    }
+  };
+
+  React.useEffect(() => {
+    if (showScanner && videoRef.current) {
+      initScanner();
+      
+      // Cleanup function
+      return () => {
+        scanningRef.current = false;
+        if (videoRef.current && videoRef.current.srcObject) {
+          const tracks = (videoRef.current.srcObject as MediaStream).getTracks();
+          tracks.forEach(track => track.stop());
+        }
+      };
+    }
+  }, [showScanner]);
+
   const handleError = (err: any) => {
     console.error('QR Scanner error:', err);
     setScannerError('Camera access denied. Please allow camera permissions to scan QR codes.');
@@ -161,11 +232,12 @@ const AddFriend: React.FC<AddFriendProps> = ({ currentUser, onBack }) => {
               <div className="relative">
                 {/* Camera preview */}
                 <div className="aspect-square w-full rounded-2xl overflow-hidden border-4 border-white/20 bg-black relative">
-                  <QrScanner
-                    onResult={(result) => handleScan(result?.getText() || null)}
-                    onError={handleError}
-                    style={{ width: '100%', height: '100%' }}
-                    constraints={{ facingMode: 'environment' }} // Use back camera
+                  <video 
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full h-full object-cover"
                   />
                   
                   {/* Scanning frame overlay */}
