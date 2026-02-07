@@ -46,7 +46,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, chatId, onBack, apiKey
         setMessages(msgs);
     };
     loadMsgs();
-    
+  }, [chatId]);
+  
+  useEffect(() => {
     // Set up real-time subscription for new messages
     const messageSubscription = mockDB.subscribeToChatMessages(chatId, (newMessage) => {
       setMessages(prev => [...prev, newMessage]);
@@ -54,9 +56,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, chatId, onBack, apiKey
     
     // Clean up subscription on unmount
     return () => {
-      if (messageSubscription) {
-        mockDB.unsubscribeFromChannel(`messages-${chatId}`);
-      }
+      mockDB.unsubscribeFromChannel(`messages-${chatId}`);
     };
   }, [chatId]);
 
@@ -80,21 +80,28 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, chatId, onBack, apiKey
     setInputText('');
     setSuggestedReply(null); // Clear suggestion
 
-    // Send to Mock DB
-    await mockDB.sendMessage(chatId, currentUser.id, text);
-    
-    // Refresh to get real ID
-    const msgs = await mockDB.getMessages(chatId);
-    setMessages(msgs);
+    try {
+      // Send to Supabase
+      await mockDB.sendMessage(chatId, currentUser.id, text);
+      
+      // Refresh to get real ID
+      const msgs = await mockDB.getMessages(chatId);
+      setMessages(msgs);
 
-    // If talking to Bot
-    if (isBotChat) {
-        setIsAiThinking(true);
-        const reply = await chatWithBot([...msgs, tempMsg]);
-        await mockDB.sendMessage(chatId, 'uid_ai_bot', reply, true);
-        setIsAiThinking(false);
-        const msgsAfterBot = await mockDB.getMessages(chatId);
-        setMessages(msgsAfterBot);
+      // If talking to Bot
+      if (isBotChat) {
+          setIsAiThinking(true);
+          const reply = await chatWithBot([...msgs, tempMsg]);
+          await mockDB.sendMessage(chatId, 'uid_ai_bot', reply, true);
+          setIsAiThinking(false);
+          const msgsAfterBot = await mockDB.getMessages(chatId);
+          setMessages(msgsAfterBot);
+      }
+    } catch (error) {
+      console.error('Error sending message:', error);
+      // Remove the optimistic message if sending failed
+      setMessages(prev => prev.filter(msg => msg.id !== 'temp'));
+      alert('Failed to send message. Please try again.');
     }
   };
 

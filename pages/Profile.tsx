@@ -19,14 +19,41 @@ const Profile: React.FC<ProfileProps> = ({ currentUser, onLogout, apiKey, setApi
   const [status, setStatus] = useState<User['status']>(currentUser.status || 'online');
 
   const handleSave = async () => {
-    // In a real app, we would update the user profile
-    setEditing(false);
+    // Update user profile in database
+    try {
+      if (!mockDB) {
+        console.error('Supabase not available');
+        alert('Supabase not available');
+        return;
+      }
+      
+      // Update user profile using the service
+      const updatedUser = await mockDB.updateUserProfile(currentUser.id, {
+        username,
+        job_title: jobTitle
+      });
+      
+      // Update current user in session storage
+      sessionStorage.setItem('currentUser', JSON.stringify(updatedUser));
+      
+      setEditing(false);
+    } catch (err) {
+      console.error('Error updating user profile:', err);
+      alert('Failed to update profile');
+    }
   };
 
   const handleStatusChange = async (newStatus: User['status']) => {
     setStatus(newStatus);
     // Update status in database
-    await mockDB.updateUserStatus(currentUser.id, newStatus);
+    try {
+      await mockDB.updateUserStatus(currentUser.id, newStatus);
+    } catch (error) {
+      console.error('Error updating status:', error);
+      alert('Failed to update status. Please try again.');
+      // Revert to previous status
+      setStatus(currentUser.status || 'online');
+    }
     
     // In a real app, we would subscribe to status changes
     // Here we just update the local state

@@ -16,14 +16,19 @@ const AddFriend: React.FC<AddFriendProps> = ({ currentUser, onBack }) => {
   const [successMessage, setSuccessMessage] = useState('');
 
   const loadUsers = async () => {
-    // In a real app, we'd search for users by username
-    // For now, we'll get all users except the current user
-    // Since we don't have a direct method to get all users, we'll simulate with mock data
-    const mockUsers: User[] = [
-      { id: 'uid_demo_friend', username: 'Sarah Parker', status: 'busy', job_title: 'Product Manager', avatar_url: 'https://picsum.photos/200/200?random=2', created_at: new Date().toISOString() },
-      { id: 'uid_ai_bot', username: 'Gemini Assistant', status: 'online', job_title: 'Virtual Assistant', avatar_url: 'https://picsum.photos/200/200?random=1', created_at: new Date().toISOString() }
-    ];
-    setUsers(mockUsers);
+    try {
+      // Get all users except the current user
+      const allUsers = await mockDB.getAllUsers(currentUser.id);
+      setUsers(allUsers);
+    } catch (error) {
+      console.error('Error loading users:', error);
+      // Fallback to some default users if API fails
+      const fallbackUsers: User[] = [
+        { id: 'uid_demo_friend', username: 'Sarah Parker', status: 'busy', job_title: 'Product Manager', avatar_url: 'https://picsum.photos/200/200?random=2', created_at: new Date().toISOString() },
+        { id: 'uid_ai_bot', username: 'Gemini Assistant', status: 'online', job_title: 'Virtual Assistant', avatar_url: 'https://picsum.photos/200/200?random=1', created_at: new Date().toISOString() }
+      ];
+      setUsers(fallbackUsers);
+    }
   };
 
   const loadFriends = async () => {

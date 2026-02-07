@@ -300,6 +300,32 @@ export const supabaseDB = {
     }
   },
 
+  getAllUsers: async (excludeCurrentUserId: string): Promise<User[]> => {
+    checkSupabaseAvailability();
+    
+    if (!supabase) {
+      console.warn('Supabase not available, returning empty array');
+      return [];
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .neq('id', excludeCurrentUserId); // Exclude current user
+
+      if (error) {
+        console.error('Error fetching all users:', error);
+        throw error;
+      }
+
+      return data as User[];
+    } catch (error) {
+      console.error('Error in getAllUsers:', error);
+      throw error;
+    }
+  },
+
   updateUserStatus: async (userId: string, status: User['status']): Promise<void> => {
     checkSupabaseAvailability();
     
@@ -320,6 +346,35 @@ export const supabaseDB = {
       }
     } catch (error) {
       console.error('Error in updateUserStatus:', error);
+      throw error;
+    }
+  },
+
+  updateUserProfile: async (userId: string, updates: Partial<User>): Promise<User> => {
+    checkSupabaseAvailability();
+    
+    if (!supabase) {
+      console.warn('Supabase not available, simulating profile update');
+      // Return a simulated updated user
+      return { ...updates, id: userId } as User;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .update(updates)
+        .eq('id', userId)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error updating user profile:', error);
+        throw error;
+      }
+      
+      return data as User;
+    } catch (error) {
+      console.error('Error in updateUserProfile:', error);
       throw error;
     }
   },

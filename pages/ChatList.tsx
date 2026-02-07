@@ -85,9 +85,15 @@ const ChatList: React.FC<ChatListProps> = ({ currentUser, onOpenChat, apiKey, on
   const [searchTerm, setSearchTerm] = useState('');
 
   const loadChats = async () => {
-    const data = await mockDB.getChats(currentUser.id);
-    setChats(data);
-    if (loading) setLoading(false);
+    try {
+      const data = await mockDB.getChats(currentUser.id);
+      setChats(data);
+      if (loading) setLoading(false);
+    } catch (error) {
+      console.error('Error loading chats:', error);
+      if (loading) setLoading(false);
+      alert('Failed to load chats. Please try again later.');
+    }
   };
 
   useEffect(() => {
@@ -98,9 +104,7 @@ const ChatList: React.FC<ChatListProps> = ({ currentUser, onOpenChat, apiKey, on
     
     // Clean up subscription on unmount
     return () => {
-      if (chatSubscription) {
-        mockDB.unsubscribeFromChannel(`chats-${currentUser.id}`);
-      }
+      mockDB.unsubscribeFromChannel(`chats-${currentUser.id}`);
     };
   }, [currentUser.id]);
 

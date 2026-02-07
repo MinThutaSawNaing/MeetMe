@@ -13,9 +13,15 @@ const Stories: React.FC<StoriesProps> = ({ currentUser }) => {
 
   useEffect(() => {
     const loadStories = async () => {
-      const data = await mockDB.getStories();
-      setStories(data);
-      setLoading(false);
+      try {
+        const data = await mockDB.getStories();
+        setStories(data);
+        setLoading(false);
+      } catch (error) {
+        console.error('Error loading stories:', error);
+        setLoading(false);
+        alert('Failed to load stories. Please try again later.');
+      }
     };
 
     loadStories();

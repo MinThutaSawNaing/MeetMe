@@ -14,9 +14,15 @@ const Contacts: React.FC<ContactsProps> = ({ currentUser, onOpenChat, onAddFrien
   const [loading, setLoading] = useState(true);
 
   const loadFriends = async () => {
-    const data = await mockDB.getFriends(currentUser.id);
-    setFriends(data);
-    setLoading(false);
+    try {
+      const data = await mockDB.getFriends(currentUser.id);
+      setFriends(data);
+      setLoading(false);
+    } catch (error) {
+      console.error('Error loading friends:', error);
+      setLoading(false);
+      alert('Failed to load contacts. Please try again later.');
+    }
   };
 
   useEffect(() => {

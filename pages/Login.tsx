@@ -9,12 +9,20 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [username, setUsername] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username.trim()) return;
     setLoading(true);
-    // Simulate network delay
-    setTimeout(() => onLogin(username), 800);
+    
+    try {
+      // Call the actual Supabase authentication
+      await onLogin(username);
+    } catch (error) {
+      console.error('Login error:', error);
+      alert('Login failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
