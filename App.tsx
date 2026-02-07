@@ -26,11 +26,18 @@ const App = () => {
   // Initial Load
   useEffect(() => {
     const initApp = async () => {
-      // Check if user is logged in
-      const user = mockAuth.getCurrentUser();
+      // Try to get API Key from storage if previously saved
+      const storedKey = localStorage.getItem('gemini_api_key');
+      if (storedKey) {
+          setApiKey(storedKey);
+          initializeGemini(storedKey);
+      }
       
       // Simulate splash screen
       await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      // Check if user is logged in
+      const user = mockAuth.getCurrentUser();
       
       if (user) {
           setCurrentUser(user);
@@ -41,13 +48,6 @@ const App = () => {
     };
     
     initApp();
-
-    // Try to get API Key from storage if previously saved
-    const storedKey = localStorage.getItem('gemini_api_key');
-    if (storedKey) {
-        setApiKey(storedKey);
-        initializeGemini(storedKey);
-    }
   }, []);
 
   const handleLogin = async (username: string) => {
