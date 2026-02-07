@@ -1,0 +1,8 @@
+{
+  "name": "MeetMe",
+  "description": "A modern, secure, mobile-first messaging application with AI-powered features.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}

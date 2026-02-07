@@ -1,0 +1,647 @@
+import { supabase, checkSupabaseAvailability, isSupabaseAvailable } from './supabaseClient';
+import { User, Chat, Message, Friend, Story } from '../types';
+
+// Delay utility function
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Real-time subscriptions management
+const realTimeSubscriptions: { [key: string]: any } = {};
+
+// Supabase service implementation
+export const supabaseDB = {
+  // Chats operations
+  getChats: async (userId: string): Promise<Chat[]> => {
+    checkSupabaseAvailability();
+    
+    if (!supabase) {
+      // Fallback to some mock behavior if Supabase is not available
+      console.warn('Supabase not available, returning empty array');
+      return [];
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('chats')
+        .select('*')
+        .filter('participants', 'cs', `{${userId}}`) // cs = contains
+        .order('updated_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching chats:', error);
+        throw error;
+      }
+
+      return data as Chat[];
+    } catch (error) {
+      console.error('Error in getChats:', error);
+      throw error;
+    }
+  },
+
+  createChat: async (userIds: string[]): Promise<Chat> => {
+    checkSupabaseAvailability();
+    
+    if (!supabase) {
+      // Fallback to mock behavior
+      console.warn('Supabase not available, simulating chat creation');
+      return {
+        id: `temp_chat_${Date.now()}`,
+        participants: userIds,
+        updated_at: new Date().toISOString(),
+        last_message: 'New conversation started',
+        is_group: userIds.length > 2
+      };
+    }
+
+    try {
+      // First check if a chat already exists with the same participants
+      const { data: existingChats, error: fetchError } = await supabase
+        .from('chats')
+        .select('*')
+        .contains('participants', userIds);
+
+      if (fetchError) {
+        console.error('Error checking existing chats:', fetchError);
+      } else if (existingChats && existingChats.length > 0) {
+        // Return existing chat if found
+        return existingChats[0] as Chat;
+      }
+
+      const newChat: Omit<Chat, 'id'> = {
+        participants: userIds,
+        updated_at: new Date().toISOString(),
+        last_message: 'New conversation started',
+        is_group: userIds.length > 2
+      };
+
+      const { data, error } = await supabase
+        .from('chats')
+        .insert([newChat])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error creating chat:', error);
+        throw error;
+      }
+
+      return data as Chat;
+    } catch (error) {
+      console.error('Error in createChat:', error);
+      throw error;
+    }
+  },
+
+  // Messages operations
+  getMessages: async (chatId: string): Promise<Message[]> => {
+    checkSupabaseAvailability();
+    
+    if (!supabase) {
+      console.warn('Supabase not available, returning empty array');
+      return [];
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('chat_id', chatId)
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching messages:', error);
+        throw error;
+      }
+
+      return data as Message[];
+    } catch (error) {
+      console.error('Error in getMessages:', error);
+      throw error;
+    }
+  },
+
+  sendMessage: async (chatId: string, senderId: string, content: string, isAi = false): Promise<Message> => {
+    checkSupabaseAvailability();
+    
+    if (!supabase) {
+      console.warn('Supabase not available, simulating message send');
+      return {
+        id: `temp_msg_${Date.now()}`,
+        chat_id: chatId,
+        sender_id: senderId,
+        content,
+        created_at: new Date().toISOString(),
+        is_ai_generated: isAi,
+        status: 'sent'
+      };
+    }
+
+    try {
+      const newMessage: Omit<Message, 'id'> = {
+        chat_id: chatId,
+        sender_id: senderId,
+        content,
+        created_at: new Date().toISOString(),
+        is_ai_generated: isAi,
+        status: 'sent'
+      };
+
+      const { data, error } = await supabase
+        .from('messages')
+        .insert([newMessage])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error sending message:', error);
+        throw error;
+      }
+
+      // Update the chat's last message and updated_at timestamp
+      await supabase
+        .from('chats')
+        .update({
+          last_message: content,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', chatId);
+
+      return data as Message;
+    } catch (error) {
+      console.error('Error in sendMessage:', error);
+      throw error;
+    }
+  },
+
+  // Friends operations
+  getFriends: async (userId: string): Promise<Friend[]> => {
+    checkSupabaseAvailability();
+    
+    if (!supabase) {
+      console.warn('Supabase not available, returning empty array');
+      return [];
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('friends')
+        .select('*')
+        .eq('user_id', userId);
+
+      if (error) {
+        console.error('Error fetching friends:', error);
+        throw error;
+      }
+
+      // Fetch user details for each friend
+      const friendIds = data.map(friend => friend.friend_id);
+      if (friendIds.length > 0) {
+        const { data: users, error: userError } = await supabase
+          .from('users')
+          .select('*')
+          .in('id', friendIds);
+
+        if (userError) {
+          console.error('Error fetching friend user data:', userError);
+        } else {
+          // Add user data to each friend object
+          return data.map(friend => {
+            const userData = users.find(user => user.id === friend.friend_id);
+            return {
+              ...friend,
+              friend_data: userData as User
+            };
+          });
+        }
+      }
+
+      return data as Friend[];
+    } catch (error) {
+      console.error('Error in getFriends:', error);
+      throw error;
+    }
+  },
+
+  addFriend: async (userId: string, friendId: string): Promise<void> => {
+    checkSupabaseAvailability();
+    
+    if (!supabase) {
+      console.warn('Supabase not available, simulating friend addition');
+      return;
+    }
+
+    if (userId === friendId) {
+      throw new Error("Cannot add yourself");
+    }
+
+    try {
+      // Check if the friendship already exists
+      const { data: existingFriendship, error: fetchError } = await supabase
+        .from('friends')
+        .select('*')
+        .match({ user_id: userId, friend_id: friendId });
+
+      if (fetchError) {
+        console.error('Error checking existing friendship:', fetchError);
+      } else if (existingFriendship && existingFriendship.length > 0) {
+        // Friendship already exists
+        return;
+      }
+
+      // Add both users as friends to each other
+      const friendships = [
+        { user_id: userId, friend_id: friendId },
+        { user_id: friendId, friend_id: userId }
+      ];
+
+      const { error } = await supabase
+        .from('friends')
+        .insert(friendships);
+
+      if (error) {
+        console.error('Error adding friends:', error);
+        throw error;
+      }
+    } catch (error) {
+      console.error('Error in addFriend:', error);
+      throw error;
+    }
+  },
+
+  // User operations
+  getUserById: async (id: string): Promise<User | undefined> => {
+    checkSupabaseAvailability();
+    
+    if (!supabase) {
+      console.warn('Supabase not available, returning undefined');
+      return undefined;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (error) {
+        if (error.code === 'PGRST116') {
+          // Record not found - not an error in this context
+          return undefined;
+        }
+        console.error('Error fetching user:', error);
+        throw error;
+      }
+
+      return data as User;
+    } catch (error) {
+      console.error('Error in getUserById:', error);
+      throw error;
+    }
+  },
+
+  updateUserStatus: async (userId: string, status: User['status']): Promise<void> => {
+    checkSupabaseAvailability();
+    
+    if (!supabase) {
+      console.warn('Supabase not available, simulating status update');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ status })
+        .eq('id', userId);
+
+      if (error) {
+        console.error('Error updating user status:', error);
+        throw error;
+      }
+    } catch (error) {
+      console.error('Error in updateUserStatus:', error);
+      throw error;
+    }
+  },
+
+  // Stories operations
+  getStories: async (): Promise<Story[]> => {
+    checkSupabaseAvailability();
+    
+    if (!supabase) {
+      console.warn('Supabase not available, returning empty array');
+      return [];
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('stories')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching stories:', error);
+        throw error;
+      }
+
+      // Fetch user details for each story
+      const userIds = data.map(story => story.user_id);
+      if (userIds.length > 0) {
+        const { data: users, error: userError } = await supabase
+          .from('users')
+          .select('*')
+          .in('id', userIds);
+
+        if (userError) {
+          console.error('Error fetching story user data:', userError);
+        } else {
+          // Add user data to each story object
+          return data.map(story => {
+            const userData = users.find(user => user.id === story.user_id);
+            return {
+              ...story,
+              user_data: userData as User
+            };
+          });
+        }
+      }
+
+      return data as Story[];
+    } catch (error) {
+      console.error('Error in getStories:', error);
+      throw error;
+    }
+  },
+
+  addStory: async (userId: string, imageUrl: string, caption?: string): Promise<Story> => {
+    checkSupabaseAvailability();
+    
+    if (!supabase) {
+      console.warn('Supabase not available, simulating story addition');
+      return {
+        id: `temp_story_${Date.now()}`,
+        user_id: userId,
+        image_url: imageUrl,
+        created_at: new Date().toISOString(),
+        caption
+      };
+    }
+
+    try {
+      const newStory: Omit<Story, 'id'> = {
+        user_id: userId,
+        image_url: imageUrl,
+        created_at: new Date().toISOString(),
+        caption
+      };
+
+      const { data, error } = await supabase
+        .from('stories')
+        .insert([newStory])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error adding story:', error);
+        throw error;
+      }
+
+      return data as Story;
+    } catch (error) {
+      console.error('Error in addStory:', error);
+      throw error;
+    }
+  },
+
+  // Real-time subscription methods
+  subscribeToChatMessages: (chatId: string, callback: (message: Message) => void) => {
+    if (!supabase) {
+      console.warn('Supabase not available, cannot subscribe to messages');
+      return;
+    }
+
+    // Unsubscribe if already subscribed
+    if (realTimeSubscriptions[`messages-${chatId}`]) {
+      realTimeSubscriptions[`messages-${chatId}`].unsubscribe();
+    }
+
+    const channel = supabase
+      .channel(`messages-${chatId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `chat_id=eq.${chatId}`
+        },
+        (payload) => {
+          callback(payload.new as Message);
+        }
+      );
+
+    const subscription = channel.subscribe();
+    realTimeSubscriptions[`messages-${chatId}`] = channel;
+    return subscription;
+  },
+
+  subscribeToChats: (userId: string, callback: (chats: Chat[]) => void) => {
+    if (!supabase) {
+      console.warn('Supabase not available, cannot subscribe to chats');
+      return;
+    }
+
+    // Unsubscribe if already subscribed
+    if (realTimeSubscriptions[`chats-${userId}`]) {
+      realTimeSubscriptions[`chats-${userId}`].unsubscribe();
+    }
+
+    const channel = supabase
+      .channel(`chats-${userId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'chats',
+          filter: `participants.cs.{${userId}}`
+        },
+        () => {
+          // Refresh chats when there's an update
+          supabaseDB.getChats(userId).then(callback);
+        }
+      );
+
+    const subscription = channel.subscribe();
+    realTimeSubscriptions[`chats-${userId}`] = channel;
+    return subscription;
+  },
+
+  subscribeToUserStatus: (userId: string, callback: (user: User) => void) => {
+    if (!supabase) {
+      console.warn('Supabase not available, cannot subscribe to user status');
+      return;
+    }
+
+    // Unsubscribe if already subscribed
+    if (realTimeSubscriptions[`user-${userId}`]) {
+      realTimeSubscriptions[`user-${userId}`].unsubscribe();
+    }
+
+    const channel = supabase
+      .channel(`user-${userId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'users',
+          filter: `id=eq.${userId}`
+        },
+        (payload) => {
+          callback(payload.new as User);
+        }
+      );
+
+    const subscription = channel.subscribe();
+    realTimeSubscriptions[`user-${userId}`] = channel;
+    return subscription;
+  },
+
+  unsubscribeFromChannel: (channelName: string) => {
+    if (realTimeSubscriptions[channelName]) {
+      realTimeSubscriptions[channelName]?.unsubscribe();
+      delete realTimeSubscriptions[channelName];
+    }
+  },
+
+  unsubscribeAll: () => {
+    Object.keys(realTimeSubscriptions).forEach(channelName => {
+      realTimeSubscriptions[channelName]?.unsubscribe();
+    });
+    Object.keys(realTimeSubscriptions).forEach(key => delete realTimeSubscriptions[key]);
+  }
+};
+
+export const supabaseAuth = {
+  signIn: async (username: string): Promise<{ user: User | null; error: string | null }> => {
+    checkSupabaseAvailability();
+    
+    if (!supabase) {
+      console.warn('Supabase not available, simulating sign in');
+      // For fallback, return a temporary user
+      const tempUser: User = {
+        id: `temp_user_${Date.now()}`,
+        username,
+        avatar_url: `https://picsum.photos/200/200?random=${Math.floor(Math.random() * 1000)}`,
+        created_at: new Date().toISOString(),
+        status: 'online',
+        job_title: 'Team Member'
+      };
+      return { user: tempUser, error: null };
+    }
+
+    try {
+      // First, try to find the user by username
+      let { data: existingUser, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('username', username)
+        .single();
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 means no rows found
+        console.error('Error finding user:', error);
+        return { user: null, error: error.message };
+      }
+
+      let user: User;
+      if (existingUser) {
+        user = existingUser as User;
+      } else {
+        // Create a new user if not found
+        const newUser: Omit<User, 'id'> = {
+          username,
+          avatar_url: `https://picsum.photos/200/200?random=${Math.floor(Math.random() * 1000)}`,
+          created_at: new Date().toISOString(),
+          status: 'online',
+          job_title: 'Team Member'
+        };
+
+        const { data, error: insertError } = await supabase
+          .from('users')
+          .insert([newUser])
+          .select()
+          .single();
+
+        if (insertError) {
+          console.error('Error creating user:', insertError);
+          return { user: null, error: insertError.message };
+        }
+
+        user = data as User;
+      }
+
+      // Update user status to online
+      await supabase
+        .from('users')
+        .update({ status: 'online' })
+        .eq('id', user.id);
+
+      // Store the user in session storage for persistence
+      sessionStorage.setItem('currentUser', JSON.stringify(user));
+
+      return { user, error: null };
+    } catch (error: any) {
+      console.error('Sign in error:', error);
+      return { user: null, error: error.message };
+    }
+  },
+
+  signOut: async (): Promise<void> => {
+    checkSupabaseAvailability();
+    
+    if (!supabase) {
+      console.warn('Supabase not available, simulating sign out');
+      sessionStorage.removeItem('currentUser');
+      return;
+    }
+
+    try {
+      // Update current user status to offline
+      const currentUserStr = sessionStorage.getItem('currentUser');
+      if (currentUserStr) {
+        const currentUser = JSON.parse(currentUserStr);
+        if (currentUser?.id) {
+          await supabase
+            .from('users')
+            .update({ status: 'offline' })
+            .eq('id', currentUser.id);
+        }
+      }
+
+      // Remove current user from session storage
+      sessionStorage.removeItem('currentUser');
+      
+      // Unsubscribe from all real-time channels
+      supabaseDB.unsubscribeAll();
+    } catch (error) {
+      console.error('Sign out error:', error);
+    }
+  },
+
+  getCurrentUser: (): User | null => {
+    // Try to get from session storage first
+    const userStr = sessionStorage.getItem('currentUser');
+    if (userStr) {
+      try {
+        return JSON.parse(userStr);
+      } catch (e) {
+        console.error('Error parsing current user from session storage:', e);
+        return null;
+      }
+    }
+
+    // If not in session storage, return null
+    return null;
+  }
+};
