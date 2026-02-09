@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { User, Chat } from '../types';
 import { supabaseDB as mockDB } from '../services/supabaseService';
+import { socketRealtimeService } from '../services/websocketService';
 import { Icons } from '../components/Icon';
 
 interface ChatListProps {
@@ -116,24 +117,13 @@ const ChatItem: React.FC<ChatItemProps> = ({ chat, currentUser, onOpenChat, onDe
 
 const ChatList: React.FC<ChatListProps> = ({ currentUser, onOpenChat, apiKey, onSetApiKey }) => {
   const [chats, setChats] = useState<Chat[]>([]);
-  const [filteredChats, setFilteredChats] = useState<Chat[]>([]);
+  const [users, setUsers] = useState<Record<string, User>>({});
   const [loading, setLoading] = useState(true);
   const [showKeyModal, setShowKeyModal] = useState(false);
   const [tempKey, setTempKey] = useState('');
   const [activeTab, setActiveTab] = useState<'all' | 'direct' | 'groups'>('all');
   const [searchTerm, setSearchTerm] = useState('');
-
-  const loadChats = async () => {
-    try {
-      const data = await mockDB.getChats(currentUser.id);
-      setChats(data);
-      if (loading) setLoading(false);
-    } catch (error) {
-      console.error('Error loading chats:', error);
-      if (loading) setLoading(false);
-      alert('Failed to load chats. Please try again later.');
-    }
-  };
+  const [filteredChats, setFilteredChats] = useState<Chat[]>([]);
 
   const handleDeleteChat = async (chatId: string, deleteType: 'forMe' | 'completely') => {
     try {
@@ -145,7 +135,8 @@ const ChatList: React.FC<ChatListProps> = ({ currentUser, onOpenChat, apiKey, on
         // Completely remove from database
         await mockDB.deleteChatCompletely(chatId);
         // Refresh chat list
-        loadChats();
+        const chatData = await mockDB.getChats(currentUser.id);
+        setChats(chatData);
       }
     } catch (error) {
       console.error('Error deleting chat:', error);
@@ -154,33 +145,31 @@ const ChatList: React.FC<ChatListProps> = ({ currentUser, onOpenChat, apiKey, on
   };
 
   useEffect(() => {
-    loadChats();
-    
-    console.log('Setting up real-time subscription for user chats:', currentUser.id);
-    
-    // Set up real-time subscription for chat updates
-    const chatSubscription = mockDB.subscribeToChats(currentUser.id, (updatedChats) => {
-      console.log('Received real-time chat updates:', updatedChats.length);
-      setChats(prevChats => {
-        // Update chats with new data while preserving order
-        const updatedChatMap = new Map(updatedChats.map(chat => [chat.id, chat]));
-        const preservedOrder = prevChats.map(prevChat => 
-          updatedChatMap.has(prevChat.id) ? updatedChatMap.get(prevChat.id)! : prevChat
-        );
+    const loadChats = async () => {
+      try {
+        setLoading(true);
+        const chatData = await mockDB.getChats(currentUser.id);
+        setChats(chatData);
         
-        // Add any new chats that weren't in the previous list
-        const existingIds = new Set(preservedOrder.map(chat => chat.id));
-        const newChats = updatedChats.filter(chat => !existingIds.has(chat.id));
-        
-        return [...newChats, ...preservedOrder];
-      });
-    });
-    
-    // Clean up subscription on unmount
-    return () => {
-      console.log('Cleaning up real-time subscription for user chats:', currentUser.id);
-      mockDB.unsubscribeFromChannel(`chats-${currentUser.id}`);
+        // Load user data for all participants
+        const userMap: Record<string, User> = {};
+        for (const chat of chatData) {
+          for (const participantId of chat.participants) {
+            if (participantId !== currentUser.id && !userMap[participantId]) {
+              const user = await mockDB.getUserById(participantId);
+              if (user) userMap[participantId] = user;
+            }
+          }
+        }
+        setUsers(userMap);
+      } catch (error) {
+        console.error('Error loading chats:', error);
+      } finally {
+        setLoading(false);
+      }
     };
+
+    loadChats();
   }, [currentUser.id]);
 
   useEffect(() => {
@@ -193,8 +182,43 @@ const ChatList: React.FC<ChatListProps> = ({ currentUser, onOpenChat, apiKey, on
         result = result.filter(c => !c.is_group);
     }
     
+    // Filter by search term
+    if (searchTerm) {
+        result = result.filter(chat => {
+            const otherUserId = chat.participants.find(id => id !== currentUser.id);
+            const otherUser = otherUserId ? users[otherUserId] : null;
+            const matchesName = otherUser?.username?.toLowerCase().includes(searchTerm.toLowerCase());
+            const matchesMessage = chat.last_message?.toLowerCase().includes(searchTerm.toLowerCase());
+            return matchesName || matchesMessage;
+        });
+    }
+    
     setFilteredChats(result);
-  }, [chats, activeTab, searchTerm]);
+  }, [chats, activeTab, searchTerm, users, currentUser.id]);
+
+  // Socket.IO subscription for chat updates
+  useEffect(() => {
+    console.log('Setting up Socket.IO subscription for user chats:', currentUser.id);
+    
+    // Subscribe to user status changes to update chat list
+    const unsubscribeStatus = socketRealtimeService.subscribeToUserStatus((userData) => {
+      console.log('User status changed:', userData);
+      // Update user status in our local cache
+      setUsers(prev => ({
+        ...prev,
+        [userData.userId]: {
+          ...prev[userData.userId],
+          status: userData.status
+        }
+      }));
+    });
+
+    // Clean up subscriptions
+    return () => {
+      console.log('Cleaning up Socket.IO subscriptions for chat list');
+      unsubscribeStatus();
+    };
+  }, [currentUser.id]);
 
   return (
     <div className="flex flex-col h-full pt-6 pb-20">

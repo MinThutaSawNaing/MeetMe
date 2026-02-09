@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { User, Message } from '../types';
 import { supabaseDB as mockDB } from '../services/supabaseService';
+import { socketRealtimeService } from '../services/websocketService';
 import { generateSmartReply, chatWithBot, summarizeChat, translateMessage } from '../services/geminiService';
 import { Icons } from '../components/Icon';
 
@@ -49,11 +50,11 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, chatId, onBack, apiKey
   }, [chatId]);
   
   useEffect(() => {
-    console.log('Setting up real-time subscription for chat:', chatId);
+    console.log('Setting up Socket.IO subscription for chat:', chatId);
     
-    // Set up real-time subscription for new messages
-    const unsubscribe = mockDB.subscribeToChatMessages(chatId, (newMessage) => {
-      console.log('Received real-time message:', newMessage);
+    // Set up Socket.IO subscription for new messages
+    const unsubscribe = socketRealtimeService.subscribeToChatMessages(chatId, (newMessage) => {
+      console.log('Received Socket.IO message:', newMessage);
       setMessages(prev => {
         // Avoid duplicate messages by checking if message already exists
         const exists = prev.some(msg => msg.id === newMessage.id);
@@ -70,7 +71,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, chatId, onBack, apiKey
     
     // Clean up subscription on unmount
     return () => {
-      console.log('Cleaning up real-time subscription for chat:', chatId);
+      console.log('Cleaning up Socket.IO subscription for chat:', chatId);
       unsubscribe();
     };
   }, [chatId]);
@@ -96,24 +97,44 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, chatId, onBack, apiKey
     setSuggestedReply(null); // Clear suggestion
 
     try {
-      // Send to Supabase
-      const sentMessage = await mockDB.sendMessage(chatId, currentUser.id, text);
+      // Send via Socket.IO
+      const success = await socketRealtimeService.sendMessage(chatId, currentUser.id, text);
       
-      // Update the temp message with the real one from DB
-      setMessages(prev => 
-        prev.map(msg => 
-          msg.id === 'temp' && msg.content === text 
-            ? { ...sentMessage, status: 'sent' } // Use the actual message from DB
-            : msg
-        )
-      );
-
-      // If talking to Bot
-      if (isBotChat) {
+      if (success) {
+        // Message was sent successfully via Socket.IO
+        // The real-time subscription will handle updating the UI with the confirmed message
+        console.log('Message sent via Socket.IO');
+        
+        // If talking to Bot
+        if (isBotChat) {
+          setIsAiThinking(true);
+          // Use the temp message for bot response
+          const tempMessage = { ...tempMsg, id: 'temp_bot' };
+          const reply = await chatWithBot([...messages, tempMessage]);
+          await socketRealtimeService.sendMessage(chatId, 'uid_ai_bot', reply, true);
+          setIsAiThinking(false);
+        }
+      } else {
+        // Fallback to direct database insert if Socket.IO fails
+        console.log('Socket.IO send failed, falling back to direct database insert');
+        const sentMessage = await mockDB.sendMessage(chatId, currentUser.id, text);
+        
+        // Update the temp message with the real one from DB
+        setMessages(prev => 
+          prev.map(msg => 
+            msg.id === 'temp' && msg.content === text 
+              ? { ...sentMessage, status: 'sent' } // Use the actual message from DB
+              : msg
+          )
+        );
+        
+        // If talking to Bot
+        if (isBotChat) {
           setIsAiThinking(true);
           const reply = await chatWithBot([...messages, sentMessage]);
           await mockDB.sendMessage(chatId, 'uid_ai_bot', reply, true);
           setIsAiThinking(false);
+        }
       }
     } catch (error) {
       console.error('Error sending message:', error);
