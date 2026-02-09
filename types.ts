@@ -17,6 +17,7 @@ export interface Message {
   created_at: string;
   is_ai_generated?: boolean;
   status?: 'sent' | 'delivered' | 'read';
+  read_by?: string[]; // Array of user IDs who have read this message
 }
 
 export interface Chat {

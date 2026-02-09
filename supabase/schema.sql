@@ -35,7 +35,8 @@ CREATE TABLE IF NOT EXISTS messages (
   content TEXT NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   is_ai_generated BOOLEAN DEFAULT FALSE,
-  status VARCHAR(20) DEFAULT 'sent' CHECK (status IN ('sent', 'delivered', 'read'))
+  status VARCHAR(20) DEFAULT 'sent' CHECK (status IN ('sent', 'delivered', 'read')),
+  read_by UUID[] DEFAULT '{}' -- Array of user IDs who have read this message
 );
 
 -- Friends table

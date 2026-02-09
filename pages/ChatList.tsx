@@ -15,6 +15,7 @@ interface ChatItemProps {
   currentUser: User;
   onOpenChat: (chatId: string) => void;
   onDeleteChat: (chatId: string, deleteType: 'forMe' | 'completely') => void;
+  unreadCount: number;
 }
 
 const getStatusColor = (status?: string) => {
@@ -26,7 +27,7 @@ const getStatusColor = (status?: string) => {
     }
 };
 
-const ChatItem: React.FC<ChatItemProps> = ({ chat, currentUser, onOpenChat, onDeleteChat }) => {
+const ChatItem: React.FC<ChatItemProps> = ({ chat, currentUser, onOpenChat, onDeleteChat, unreadCount }) => {
     const [otherUser, setOtherUser] = useState<User | null>(null);
     const [showDeleteMenu, setShowDeleteMenu] = useState(false);
 
@@ -66,10 +67,10 @@ const ChatItem: React.FC<ChatItemProps> = ({ chat, currentUser, onOpenChat, onDe
                     </div>
                     <div className="flex justify-between items-center">
                         <p className="text-gray-400 text-sm truncate max-w-[80%]">{chat.last_message}</p>
-                        {/* Fake unread badge for enterprise feel */}
-                        {Math.random() > 0.8 && (
+                        {/* Actual unread message badge */}
+                        {unreadCount > 0 && (
                             <span className="bg-primary-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center shadow-md shadow-primary-900/50">
-                                {Math.floor(Math.random() * 3) + 1}
+                                {unreadCount > 99 ? '99+' : unreadCount}
                             </span>
                         )}
                     </div>
@@ -123,6 +124,23 @@ const ChatList: React.FC<ChatListProps> = ({ currentUser, onOpenChat, apiKey, on
   const [activeTab, setActiveTab] = useState<'all' | 'direct' | 'groups'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredChats, setFilteredChats] = useState<Chat[]>([]);
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
+
+  const fetchUnreadCounts = async (chatList: Chat[]) => {
+    const counts: Record<string, number> = {};
+    
+    for (const chat of chatList) {
+      try {
+        const count = await mockDB.getUnreadMessageCount(chat.id, currentUser.id);
+        counts[chat.id] = count;
+      } catch (error) {
+        console.error(`Error fetching unread count for chat ${chat.id}:`, error);
+        counts[chat.id] = 0;
+      }
+    }
+    
+    setUnreadCounts(counts);
+  };
 
   const handleDeleteChat = async (chatId: string, deleteType: 'forMe' | 'completely') => {
     try {
@@ -170,6 +188,13 @@ const ChatList: React.FC<ChatListProps> = ({ currentUser, onOpenChat, apiKey, on
 
     loadChats();
   }, [currentUser.id]);
+
+  // Fetch unread counts when chats change
+  useEffect(() => {
+    if (chats.length > 0) {
+      fetchUnreadCounts(chats);
+    }
+  }, [chats, currentUser.id]);
 
   useEffect(() => {
     let result = chats;
@@ -323,7 +348,16 @@ const ChatList: React.FC<ChatListProps> = ({ currentUser, onOpenChat, apiKey, on
             <p className="text-sm font-medium">No active conversations found.</p>
           </div>
         ) : (
-          filteredChats.map(chat => <ChatItem key={chat.id} chat={chat} currentUser={currentUser} onOpenChat={onOpenChat} onDeleteChat={handleDeleteChat} />)
+          filteredChats.map(chat => (
+            <ChatItem 
+              key={chat.id} 
+              chat={chat} 
+              currentUser={currentUser} 
+              onOpenChat={onOpenChat} 
+              onDeleteChat={handleDeleteChat} 
+              unreadCount={unreadCounts[chat.id] || 0}
+            />
+          ))
         )}
       </div>
     </div>

@@ -45,9 +45,16 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, chatId, onBack, apiKey
     const loadMsgs = async () => {
         const msgs = await mockDB.getMessages(chatId);
         setMessages(msgs);
+        
+        // Mark messages as read when chat is opened
+        try {
+          await mockDB.markMessagesAsRead(chatId, currentUser.id);
+        } catch (error) {
+          console.error('Error marking messages as read:', error);
+        }
     };
     loadMsgs();
-  }, [chatId]);
+  }, [chatId, currentUser.id]);
   
   useEffect(() => {
     console.log('Setting up real-time subscription for chat:', chatId);

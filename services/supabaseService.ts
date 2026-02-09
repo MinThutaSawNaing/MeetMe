@@ -120,6 +120,102 @@ export const supabaseDB = {
     }
   },
 
+  // Get unread message count for a chat for a specific user
+  getUnreadMessageCount: async (chatId: string, userId: string): Promise<number> => {
+    checkSupabaseAvailability();
+    
+    if (!supabase) {
+      console.warn('Supabase not available, returning 0 unread count');
+      return 0;
+    }
+
+    try {
+      // Get all messages in the chat except those sent by the user
+      const { data: messages, error } = await supabase
+        .from('messages')
+        .select('id, sender_id, read_by')
+        .eq('chat_id', chatId)
+        .neq('sender_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching messages for unread count:', error);
+        throw error;
+      }
+
+      // Count messages that haven't been read by the user
+      const unreadCount = messages?.filter(msg => 
+        !msg.read_by || !msg.read_by.includes(userId)
+      ).length || 0;
+
+      return unreadCount;
+    } catch (error) {
+      console.error('Error in getUnreadMessageCount:', error);
+      return 0;
+    }
+  },
+
+  // Mark messages as read
+  markMessagesAsRead: async (chatId: string, userId: string, messageIds?: string[]): Promise<void> => {
+    checkSupabaseAvailability();
+    
+    if (!supabase) {
+      console.warn('Supabase not available, cannot mark messages as read');
+      return;
+    }
+
+    try {
+      // For now, we'll need to fetch messages first and then update them
+      // since array_append in Supabase can be tricky with TypeScript
+      const { data: messagesToUpdate, error: fetchError } = await supabase
+        .from('messages')
+        .select('id, read_by')
+        .eq('chat_id', chatId)
+        .neq('sender_id', userId)
+        .not('read_by', 'cs', `{${userId}}`);
+
+      if (fetchError) {
+        console.error('Error fetching messages to mark as read:', fetchError);
+        throw fetchError;
+      }
+
+      if (messagesToUpdate && messagesToUpdate.length > 0) {
+        // Update each message individually to add the user to read_by array
+        for (const message of messagesToUpdate) {
+          const updatedReadBy = message.read_by ? [...message.read_by, userId] : [userId];
+          
+          const { error: updateError } = await supabase
+            .from('messages')
+            .update({ 
+              read_by: updatedReadBy,
+              status: 'read'
+            })
+            .eq('id', message.id);
+
+          if (updateError) {
+            console.error('Error updating message read status:', updateError);
+          }
+        }
+      }
+
+      // Handle specific message IDs if provided
+      if (messageIds && messageIds.length > 0) {
+        const { error: specificError } = await supabase
+          .from('messages')
+          .update({ status: 'read' })
+          .in('id', messageIds);
+          
+        if (specificError) {
+          console.error('Error updating specific messages:', specificError);
+        }
+      }
+        
+    } catch (error) {
+      console.error('Error in markMessagesAsRead:', error);
+      throw error;
+    }
+  },
+
   sendMessage: async (chatId: string, senderId: string, content: string, isAi = false): Promise<Message> => {
     checkSupabaseAvailability();
     
