@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { User, Chat } from '../types';
 import { supabaseDB as mockDB } from '../services/supabaseService';
-import { socketRealtimeService } from '../services/websocketService';
 import { Icons } from '../components/Icon';
 
 interface ChatListProps {
@@ -196,27 +195,32 @@ const ChatList: React.FC<ChatListProps> = ({ currentUser, onOpenChat, apiKey, on
     setFilteredChats(result);
   }, [chats, activeTab, searchTerm, users, currentUser.id]);
 
-  // Socket.IO subscription for chat updates
+  // Set up real-time subscription for chat updates
   useEffect(() => {
-    console.log('Setting up Socket.IO subscription for user chats:', currentUser.id);
+    console.log('Setting up real-time subscription for user chats:', currentUser.id);
     
-    // Subscribe to user status changes to update chat list
-    const unsubscribeStatus = socketRealtimeService.subscribeToUserStatus((userData) => {
-      console.log('User status changed:', userData);
-      // Update user status in our local cache
-      setUsers(prev => ({
-        ...prev,
-        [userData.userId]: {
-          ...prev[userData.userId],
-          status: userData.status
-        }
-      }));
+    // Set up real-time subscription for chat updates
+    const chatSubscription = mockDB.subscribeToChats(currentUser.id, (updatedChats) => {
+      console.log('Received real-time chat updates:', updatedChats.length);
+      setChats(prevChats => {
+        // Update chats with new data while preserving order
+        const updatedChatMap = new Map(updatedChats.map(chat => [chat.id, chat]));
+        const preservedOrder = prevChats.map(prevChat => 
+          updatedChatMap.has(prevChat.id) ? updatedChatMap.get(prevChat.id)! : prevChat
+        );
+        
+        // Add any new chats that weren't in the previous list
+        const existingIds = new Set(preservedOrder.map(chat => chat.id));
+        const newChats = updatedChats.filter(chat => !existingIds.has(chat.id));
+        
+        return [...newChats, ...preservedOrder];
+      });
     });
-
-    // Clean up subscriptions
+    
+    // Clean up subscription on unmount
     return () => {
-      console.log('Cleaning up Socket.IO subscriptions for chat list');
-      unsubscribeStatus();
+      console.log('Cleaning up real-time subscription for user chats:', currentUser.id);
+      mockDB.unsubscribeFromChannel(`chats-${currentUser.id}`);
     };
   }, [currentUser.id]);
 

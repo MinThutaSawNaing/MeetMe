@@ -79,34 +79,27 @@ The application will be available at `http://localhost:5173` and the Socket.IO s
 
 ## Real-time Communication Architecture
 
-This application uses a custom Socket.IO implementation for real-time communication instead of Supabase's built-in real-time features.
+This application uses Supabase's built-in real-time features for instant message delivery and chat updates.
 
 ### Key Components:
 
-1. **Socket.IO Server** (`socket-server.js`):
-   - Handles WebSocket connections
-   - Manages user authentication and presence
-   - Broadcasts messages to chat rooms
-   - Updates user status in real-time
+1. **Supabase Real-time Subscriptions**:
+   - Automatic message broadcasting using PostgreSQL changes
+   - Real-time chat list updates
+   - User status synchronization
+   - Built-in connection management
 
-2. **Socket.IO Client** (`services/websocketService.ts`):
-   - Manages connection lifecycle
-   - Handles reconnection logic
-   - Provides clean API for real-time operations
-   - Automatic cleanup of subscriptions
-
-3. **Integration Points**:
+2. **Integration Points**:
    - `ChatRoom.tsx`: Real-time message receiving
-   - `ChatList.tsx`: User status updates
-   - `App.tsx`: Connection management
+   - `ChatList.tsx`: Chat updates and user status
+   - `App.tsx`: Subscription management
 
-### Migration from Supabase Real-time:
-
-The application was migrated from Supabase's real-time subscriptions to a custom Socket.IO implementation for:
-- Better control over connection management
-- More flexible event handling
-- Improved error handling and reconnection logic
-- Custom business logic for message processing
+Supabase handles all the real-time infrastructure, providing:
+- Reliable WebSocket connections
+- Automatic reconnection
+- PostgreSQL change tracking
+- Scalable real-time delivery
+- No additional server costs
 
 ## Development
 
@@ -124,8 +117,7 @@ meetme/
 
 ### Key Services
 
-- `supabaseService.ts`: Database operations and authentication
-- `websocketService.ts`: Socket.IO client implementation
+- `supabaseService.ts`: Database operations, authentication, and real-time subscriptions
 - `geminiService.ts`: AI-powered features
 - `supabaseClient.ts`: Supabase client configuration
 

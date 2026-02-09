@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Layout } from './components/Layout';
 import { ViewState, User, Chat } from './types';
 import { supabaseAuth as mockAuth, supabaseDB as mockDB } from './services/supabaseService';
-import { socketRealtimeService, socketIOManager } from './services/websocketService';
 import { initializeGemini } from './services/geminiService';
 import { Icons } from './components/Icon';
 import QRCode from 'react-qr-code';
@@ -34,6 +33,14 @@ const App = () => {
           initializeGemini(storedKey);
       }
       
+      // Test real-time connection
+      try {
+        const isRealtimeWorking = await mockDB.testRealtimeConnection();
+        console.log('Real-time connection status:', isRealtimeWorking ? 'CONNECTED' : 'NOT CONNECTED');
+      } catch (error) {
+        console.error('Error testing real-time connection:', error);
+      }
+      
       // Simulate splash screen
       await new Promise(resolve => setTimeout(resolve, 1500));
       
@@ -43,14 +50,6 @@ const App = () => {
       if (user) {
           setCurrentUser(user);
           setView(ViewState.CHATS);
-          
-          // Initialize Socket.IO connection
-          try {
-            const connected = await socketRealtimeService.initialize(user.id, user.username);
-            console.log('Socket.IO connection status:', connected ? 'CONNECTED' : 'FAILED');
-          } catch (error) {
-            console.error('Error initializing Socket.IO connection:', error);
-          }
       } else {
           setView(ViewState.LOGIN);
       }
@@ -60,8 +59,8 @@ const App = () => {
     
     // Cleanup function
     return () => {
-      // Clean up Socket.IO connection when app unmounts
-      socketIOManager.disconnect();
+      // Clean up all real-time subscriptions when app unmounts
+      mockDB.unsubscribeAll();
     };
   }, []);
 
@@ -70,20 +69,12 @@ const App = () => {
     if (user) {
       setCurrentUser(user);
       setView(ViewState.CHATS);
-      
-      // Initialize Socket.IO connection
-      try {
-        const connected = await socketRealtimeService.initialize(user.id, user.username);
-        console.log('Socket.IO connection status:', connected ? 'CONNECTED' : 'FAILED');
-      } catch (error) {
-        console.error('Error initializing Socket.IO connection:', error);
-      }
     }
   };
 
   const handleLogout = async () => {
-    // Clean up Socket.IO connection
-    socketIOManager.disconnect();
+    // Clean up all real-time subscriptions
+    mockDB.unsubscribeAll();
     
     await mockAuth.signOut();
     setCurrentUser(null);
