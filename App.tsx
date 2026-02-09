@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Layout } from './components/Layout';
 import { ViewState, User, Chat } from './types';
-import { supabaseAuth as mockAuth, supabaseDB as mockDB } from './services/supabaseService';
+import { supabaseDB as mockDB } from './services/supabaseService';
+import { authService } from './services/authService';
 import { initializeGemini } from './services/geminiService';
 import { Icons } from './components/Icon';
 import QRCode from 'react-qr-code';
@@ -45,7 +46,7 @@ const App = () => {
       await new Promise(resolve => setTimeout(resolve, 1500));
       
       // Check if user is logged in
-      const user = mockAuth.getCurrentUser();
+      const user = authService.getCurrentUser();
       
       if (user) {
           setCurrentUser(user);
@@ -64,19 +65,16 @@ const App = () => {
     };
   }, []);
 
-  const handleLogin = async (username: string) => {
-    const { user } = await mockAuth.signIn(username);
-    if (user) {
-      setCurrentUser(user);
-      setView(ViewState.CHATS);
-    }
+  const handleLogin = async (user: any) => {
+    setCurrentUser(user);
+    setView(ViewState.CHATS);
   };
 
   const handleLogout = async () => {
     // Clean up all real-time subscriptions
     mockDB.unsubscribeAll();
     
-    await mockAuth.signOut();
+    await authService.signOut();
     setCurrentUser(null);
     setView(ViewState.LOGIN);
   };
@@ -105,7 +103,7 @@ const App = () => {
   }
 
   if (view === ViewState.LOGIN) {
-    return <Login onLogin={handleLogin} />;
+    return <Login onLoginSuccess={handleLogin} />;
   }
 
   return (

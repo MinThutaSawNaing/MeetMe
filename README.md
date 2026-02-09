@@ -4,8 +4,9 @@ A feature-rich chat application built with React, TypeScript, and modern web tec
 
 ## Features
 
-- **Real-time Messaging**: Instant message delivery using Socket.IO
-- **User Authentication**: Secure login system
+- **Email/Password Authentication**: Secure user authentication using Supabase Auth
+- **Real-time Messaging**: Instant message delivery using Supabase real-time
+- **User Management**: Create accounts, login, and password reset functionality
 - **Chat Management**: Create and manage individual and group chats
 - **AI Integration**: Smart replies and chat summarization using Google Gemini
 - **Story Sharing**: Share photos and videos with automatic expiration
@@ -16,8 +17,7 @@ A feature-rich chat application built with React, TypeScript, and modern web tec
 ## Technology Stack
 
 - **Frontend**: React 19, TypeScript, Vite
-- **Backend**: Supabase (Database, Authentication, Storage)
-- **Real-time**: Socket.IO (Custom WebSocket implementation)
+- **Backend**: Supabase (Database, Authentication, Storage, Real-time)
 - **AI Services**: Google Gemini API
 - **UI Components**: Lucide React icons
 - **QR Code**: @zxing/library for scanning
@@ -52,30 +52,36 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 
 4. Set up Supabase:
    - Create a new Supabase project
+   - Enable Email authentication provider
    - Run the SQL setup scripts from the `supabase/` directory
    - Configure storage buckets for stories
+   - Enable real-time for messages, chats, and users tables
 
 ### Running the Application
 
-**Option 1: Run both server and client (Recommended)**
 ```bash
-# Terminal 1: Start Socket.IO server
-npm run server
-
-# Terminal 2: Start React development server
+# Start development server
 npm run dev
 ```
 
-**Option 2: Run with helper script**
-```bash
-# This will start the Socket.IO server
-npm start
+The application will be available at `http://localhost:5173`.
 
-# In another terminal, start the React app
-npm run dev
-```
+## Authentication Setup
 
-The application will be available at `http://localhost:5173` and the Socket.IO server at `http://localhost:3001`.
+### Supabase Configuration:
+
+1. **Enable Email Authentication**:
+   - Go to Supabase Dashboard → Authentication → Providers
+   - Enable the Email provider
+   - Configure email templates as needed
+
+2. **Enable Real-time**:
+   - Go to Supabase Dashboard → Database → Realtime
+   - Enable real-time for `messages`, `chats`, and `users` tables
+
+3. **Configure Site URL** (for password reset):
+   - Go to Supabase Dashboard → Authentication → URL Configuration
+   - Set your Site URL to your deployment URL
 
 ## Real-time Communication Architecture
 
@@ -117,7 +123,8 @@ meetme/
 
 ### Key Services
 
-- `supabaseService.ts`: Database operations, authentication, and real-time subscriptions
+- `authService.ts`: Email/password authentication and session management
+- `supabaseService.ts`: Database operations and real-time subscriptions
 - `geminiService.ts`: AI-powered features
 - `supabaseClient.ts`: Supabase client configuration
 
@@ -130,9 +137,6 @@ npm run build
 ```
 
 Deploy the `dist/` folder to your preferred hosting platform (Netlify, Vercel, etc.).
-
-### Backend
-Deploy the Socket.IO server to a Node.js hosting platform (Railway, Render, etc.).
 
 ## Contributing
 
