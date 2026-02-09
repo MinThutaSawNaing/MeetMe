@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { User, Message } from '../types';
 import { supabaseDB as mockDB } from '../services/supabaseService';
+import { notificationService } from '../services/notificationService';
 import { generateSmartReply, chatWithBot, summarizeChat, translateMessage } from '../services/geminiService';
 import { Icons } from '../components/Icon';
 
@@ -51,9 +52,33 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, chatId, onBack, apiKey
   useEffect(() => {
     console.log('Setting up real-time subscription for chat:', chatId);
     
+    // Initialize notification service
+    notificationService.initialize();
+    
     // Set up real-time subscription for new messages
-    const unsubscribe = mockDB.subscribeToChatMessages(chatId, (newMessage) => {
+    const unsubscribe = mockDB.subscribeToChatMessages(chatId, async (newMessage) => {
       console.log('Received real-time message:', newMessage);
+      
+      // Show notification if message is from another user and app is not focused
+      if (newMessage.sender_id !== currentUser.id && !notificationService.isAppFocused()) {
+        try {
+          // Get sender info to display in notification
+          const sender = await mockDB.getUserById(newMessage.sender_id);
+          
+          notificationService.showNotification({
+            title: sender?.username || 'New Message',
+            body: newMessage.content.substring(0, 50) + (newMessage.content.length > 50 ? '...' : ''),
+            data: {
+              chatId: chatId,
+              senderId: newMessage.sender_id,
+              senderName: sender?.username
+            }
+          });
+        } catch (error) {
+          console.error('Error getting sender info for notification:', error);
+        }
+      }
+      
       setMessages(prev => {
         // Avoid duplicate messages by checking if message already exists
         const exists = prev.some(msg => msg.id === newMessage.id);
@@ -73,7 +98,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, chatId, onBack, apiKey
       console.log('Cleaning up real-time subscription for chat:', chatId);
       unsubscribe();
     };
-  }, [chatId]);
+  }, [chatId, currentUser.id]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

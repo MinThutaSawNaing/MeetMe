@@ -6,6 +6,8 @@ A feature-rich chat application built with React, TypeScript, and modern web tec
 
 - **Email/Password Authentication**: Secure user authentication using Supabase Auth
 - **Real-time Messaging**: Instant message delivery using Supabase real-time
+- **Push Notifications**: Native push notifications for new messages (works with Media.io native apps)
+- **Web Notifications**: Browser notifications for new messages
 - **User Management**: Create accounts, login, and password reset functionality
 - **Chat Management**: Create and manage individual and group chats
 - **AI Integration**: Smart replies and chat summarization using Google Gemini
@@ -125,6 +127,7 @@ meetme/
 
 - `authService.ts`: Email/password authentication and session management
 - `supabaseService.ts`: Database operations and real-time subscriptions
+- `notificationService.ts`: Unified notification system for web and native apps
 - `geminiService.ts`: AI-powered features
 - `supabaseClient.ts`: Supabase client configuration
 
