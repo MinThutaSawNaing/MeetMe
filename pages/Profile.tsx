@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { User } from '../types';
-import { supabaseDB as mockDB } from '../services/supabaseService';
+import { supabaseDB as mockDB, supabaseAuth as authDB } from '../services/supabaseService';
+import ImageCompressionService from '../services/imageCompressionService';
 import { Icons } from '../components/Icon';
 
 interface ProfileProps {
@@ -18,6 +19,9 @@ const Profile: React.FC<ProfileProps> = ({ currentUser, onLogout, apiKey, setApi
   const [tempApiKey, setTempApiKey] = useState(apiKey);
   const [status, setStatus] = useState<User['status']>(currentUser.status || 'online');
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleSave = async () => {
     if (isSaving) return;
@@ -45,6 +49,74 @@ const Profile: React.FC<ProfileProps> = ({ currentUser, onLogout, apiKey, setApi
       alert('Failed to update profile');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleAvatarClick = () => {
+    if (editing && fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!ImageCompressionService.isSupportedImage(file)) {
+      alert('Please select a valid image file (JPEG, PNG, WebP, GIF)');
+      return;
+    }
+
+    // Validate file size (before compression)
+    if (file.size > 10 * 1024 * 1024) { // 10MB limit before compression
+      alert('Image is too large. Please select an image under 10MB.');
+      return;
+    }
+
+    setIsUploading(true);
+    
+    try {
+      // Create preview
+      const preview = await ImageCompressionService.createPreview(file);
+      setAvatarPreview(preview);
+      
+      // Compress image
+      const compressionResult = await ImageCompressionService.compressImage(file, {
+        maxSizeMB: 1.5,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        quality: 0.8
+      });
+      
+      console.log(`Image compressed from ${ImageCompressionService.formatFileSize(compressionResult.originalSize)} to ${ImageCompressionService.formatFileSize(compressionResult.compressedSize)} (${(compressionResult.compressionRatio * 100).toFixed(1)}% of original size)`);
+      
+      // Upload to Supabase storage
+      if (mockDB) {
+        const avatarUrl = await authDB.uploadAvatar(currentUser.id, compressionResult.file);
+        
+        // Update user profile with new avatar URL
+        const updatedUser = await mockDB.updateUserProfile(currentUser.id, {
+          avatar_url: avatarUrl
+        });
+        
+        // Update current user in session storage
+        sessionStorage.setItem('currentUser', JSON.stringify(updatedUser));
+        
+        // Update local state
+        setAvatarPreview(null);
+        
+        console.log('Avatar updated successfully');
+      }
+    } catch (error) {
+      console.error('Error uploading avatar:', error);
+      alert('Failed to upload avatar. Please try again.');
+    } finally {
+      setIsUploading(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
@@ -112,15 +184,46 @@ const Profile: React.FC<ProfileProps> = ({ currentUser, onLogout, apiKey, setApi
             <div className="relative mb-6 group">
               <div className="absolute -inset-2 bg-gradient-to-r from-primary-500/20 to-cyan-500/20 rounded-full blur-xl group-hover:blur-2xl transition-all duration-500"></div>
               <div className="relative">
-                <img 
-                  src={currentUser.avatar_url} 
-                  alt={currentUser.username} 
-                  className="w-28 h-28 rounded-full object-cover border-4 border-white/10 shadow-2xl"
-                />
+                <div 
+                  className={`relative w-28 h-28 rounded-full overflow-hidden border-4 border-white/10 shadow-2xl cursor-${editing ? 'pointer' : 'default'} transition-all duration-300 ${editing ? 'hover:scale-105 hover:shadow-2xl' : ''}`}
+                  onClick={handleAvatarClick}
+                >
+                  <img 
+                    src={avatarPreview || currentUser.avatar_url} 
+                    alt={currentUser.username} 
+                    className="w-full h-full object-cover"
+                  />
+                  {editing && (
+                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity duration-300">
+                      <div className="text-center text-white p-2">
+                        {isUploading ? (
+                          <div className="flex flex-col items-center gap-1">
+                            <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                            <span className="text-xs font-medium">Uploading...</span>
+                          </div>
+                        ) : (
+                          <>
+                            <Icons.Camera size={20} className="mx-auto mb-1" />
+                            <span className="text-xs font-medium">Change Photo</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
                 <div className={`absolute bottom-2 right-2 w-8 h-8 rounded-full border-3 border-dark-bg bg-gradient-to-br ${getStatusColor(status)} shadow-lg flex items-center justify-center`}>
                   <div className="w-2 h-2 rounded-full bg-white"></div>
                 </div>
               </div>
+              
+              {/* Hidden file input */}
+              <input
+                type="file"
+                ref={fileInputRef}
+                accept="image/*"
+                onChange={handleAvatarChange}
+                className="hidden"
+              />
             </div>
             
             {/* Username */}

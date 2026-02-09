@@ -940,6 +940,62 @@ export const supabaseAuth = {
 
     // If not in session storage, return null
     return null;
+  },
+
+  /**
+   * Upload user avatar with automatic compression
+   * @param userId - The user ID
+   * @param file - The image file to upload
+   * @returns Promise<string> - The URL of the uploaded avatar
+   */
+  uploadAvatar: async (userId: string, file: File): Promise<string> => {
+    checkSupabaseAvailability();
+    
+    if (!supabase) {
+      console.warn('Supabase not available, returning mock URL');
+      return URL.createObjectURL(file);
+    }
+
+    try {
+      // Create avatars bucket if it doesn't exist
+      const { data: buckets } = await supabase.storage.listBuckets();
+      const avatarsBucket = buckets?.find(bucket => bucket.name === 'avatars');
+      
+      if (!avatarsBucket) {
+        await supabase.storage.createBucket('avatars', {
+          public: true,
+          fileSizeLimit: 1024 * 1024 * 2, // 2MB limit
+          allowedMimeTypes: ['image/*']
+        });
+      }
+
+      // Generate unique filename
+      const fileExtension = file.name.split('.').pop() || 'jpg';
+      const fileName = `${userId}_${Date.now()}.${fileExtension}`;
+      
+      // Upload file to avatars bucket
+      const { data, error } = await supabase.storage
+        .from('avatars')
+        .upload(fileName, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (error) {
+        console.error('Error uploading avatar:', error);
+        throw error;
+      }
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(fileName);
+
+      return publicUrl;
+    } catch (error) {
+      console.error('Error in uploadAvatar:', error);
+      throw error;
+    }
   }
 };
 
