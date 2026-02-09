@@ -560,12 +560,13 @@ export const supabaseDB = {
   subscribeToChatMessages: (chatId: string, callback: (message: Message) => void) => {
     if (!supabase) {
       console.warn('Supabase not available, cannot subscribe to messages');
-      return;
+      return () => {};
     }
 
     // Unsubscribe if already subscribed
     if (realTimeSubscriptions[`messages-${chatId}`]) {
       realTimeSubscriptions[`messages-${chatId}`].unsubscribe();
+      delete realTimeSubscriptions[`messages-${chatId}`];
     }
 
     console.log('Setting up real-time subscription for chat:', chatId);
@@ -603,13 +604,17 @@ export const supabaseDB = {
         console.log('Real-time channel closed for chat:', chatId);
       }
     });
-
-    const subscription = channel.subscribe();
     
     // Store the channel for cleanup
     realTimeSubscriptions[`messages-${chatId}`] = channel;
     
-    return subscription;
+    return () => {
+      console.log('Unsubscribing from real-time messages for chat:', chatId);
+      if (realTimeSubscriptions[`messages-${chatId}`]) {
+        realTimeSubscriptions[`messages-${chatId}`].unsubscribe();
+        delete realTimeSubscriptions[`messages-${chatId}`];
+      }
+    };
   },
 
   subscribeToChats: (userId: string, callback: (chats: Chat[]) => void) => {
