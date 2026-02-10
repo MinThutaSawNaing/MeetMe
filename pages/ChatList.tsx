@@ -136,30 +136,9 @@ const ChatList: React.FC<ChatListProps> = ({ currentUser, onOpenChat, apiKey, on
   const [activeTab, setActiveTab] = useState<'all' | 'direct' | 'groups'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
-  const [newMessagesIndicator, setNewMessagesIndicator] = useState(false);
 
   // Use TanStack Query for chat data
   const { data: chats = [], isLoading: loading, isError, error } = useChats(currentUser.id);
-
-  // Show notification when new messages arrive
-  useEffect(() => {
-    if (chats.length > 0) {
-      // Check if any chat has unread messages
-      const hasUnread = chats.some(chat => {
-        const unreadCount = unreadCounts[chat.id] || 0;
-        return unreadCount > 0;
-      });
-      
-      if (hasUnread) {
-        setNewMessagesIndicator(true);
-        // Auto-hide the indicator after 3 seconds
-        const timer = setTimeout(() => {
-          setNewMessagesIndicator(false);
-        }, 3000);
-        return () => clearTimeout(timer);
-      }
-    }
-  }, [chats, unreadCounts]);
 
   const handleDeleteChat = async (chatId: string, deleteType: 'forMe' | 'completely') => {
     try {
@@ -199,8 +178,6 @@ const ChatList: React.FC<ChatListProps> = ({ currentUser, onOpenChat, apiKey, on
             ...prev,
             [chat.id]: (prev[chat.id] || 0) + 1
           }));
-          // Show new messages indicator
-          setNewMessagesIndicator(true);
         }
         
         // The TanStack Query will automatically refresh the chat list
@@ -247,7 +224,7 @@ const ChatList: React.FC<ChatListProps> = ({ currentUser, onOpenChat, apiKey, on
 
   return (
     <div className="flex flex-col h-full pt-6 pb-20">
-      <header className="px-6 mb-4 flex justify-between items-start relative">
+      <header className="px-6 mb-4">
         <div>
             <h1 className="text-2xl font-bold tracking-tight text-white">MeetMe</h1>
             <div className="flex items-center gap-2 mt-1">
@@ -255,14 +232,6 @@ const ChatList: React.FC<ChatListProps> = ({ currentUser, onOpenChat, apiKey, on
                  <p className="text-gray-500 text-xs uppercase tracking-wider font-semibold">{currentUser.status || 'Offline'}</p>
             </div>
         </div>
-        
-        {/* New Messages Indicator */}
-        {newMessagesIndicator && (
-          <div className="absolute top-2 right-2 flex items-center gap-2 animate-pulse">
-            <div className="w-2 h-2 bg-green-500 rounded-full animate-bounce"></div>
-            <span className="text-xs text-green-400 font-medium">New messages</span>
-          </div>
-        )}
         {!apiKey && (
             <button 
                 onClick={() => setShowKeyModal(true)}

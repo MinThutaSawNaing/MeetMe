@@ -9,7 +9,7 @@ export const useChats = (userId: string) => {
       const data = await mockDB.getChats(userId);
       return data;
     },
-    refetchInterval: 10000, // Refetch every 10 seconds
+    refetchInterval: 4000, // Refetch every 4 seconds
     refetchIntervalInBackground: true,
     refetchOnMount: true,
     refetchOnReconnect: true,
