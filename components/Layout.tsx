@@ -55,6 +55,14 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentView, onChangeV
           </button>
 
           <button 
+            onClick={() => onChangeView(ViewState.NOTIFICATIONS)}
+            className={`flex flex-col items-center gap-1 transition-all w-14 ${currentView === ViewState.NOTIFICATIONS ? 'text-primary-500' : 'text-gray-500 hover:text-gray-300'}`}
+          >
+            <Icons.Bell size={24} fill={currentView === ViewState.NOTIFICATIONS ? "currentColor" : "none"} />
+            <span className="text-[10px] font-medium">Noti</span>
+          </button>
+
+          <button 
             onClick={() => onChangeView(ViewState.CONTACTS)}
             className={`flex flex-col items-center gap-1 transition-all w-14 ${currentView === ViewState.CONTACTS || currentView === ViewState.ADD_FRIEND ? 'text-primary-500' : 'text-gray-500 hover:text-gray-300'}`}
           >

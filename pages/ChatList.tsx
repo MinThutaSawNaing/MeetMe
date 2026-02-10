@@ -15,6 +15,8 @@ interface ChatItemProps {
   currentUser: User;
   onOpenChat: (chatId: string) => void;
   onDeleteChat: (chatId: string, deleteType: 'forMe' | 'completely') => void;
+  unreadCount: number;
+  onMarkAsRead: (chatId: string) => void;
 }
 
 const getStatusColor = (status?: string) => {
@@ -26,7 +28,7 @@ const getStatusColor = (status?: string) => {
     }
 };
 
-const ChatItem: React.FC<ChatItemProps> = ({ chat, currentUser, onOpenChat, onDeleteChat }) => {
+const ChatItem: React.FC<ChatItemProps> = ({ chat, currentUser, onOpenChat, onDeleteChat, unreadCount, onMarkAsRead }) => {
     const [otherUser, setOtherUser] = useState<User | null>(null);
     const [showDeleteMenu, setShowDeleteMenu] = useState(false);
 
@@ -42,12 +44,20 @@ const ChatItem: React.FC<ChatItemProps> = ({ chat, currentUser, onOpenChat, onDe
     }, [chat, currentUser.id]);
 
     if (!otherUser) return null;
-
+    
     return (
         <div className="relative">
             <div 
-                onClick={() => onOpenChat(chat.id)}
-                className="flex items-center gap-4 p-4 hover:bg-dark-surface/50 active:bg-dark-surface transition-colors rounded-2xl cursor-pointer mb-2 mx-2 group border border-transparent hover:border-dark-border"
+                onClick={() => {
+                  // Mark as read when opening chat
+                  if (unreadCount > 0) {
+                    onMarkAsRead(chat.id);
+                  }
+                  onOpenChat(chat.id);
+                }}
+                className={`flex items-center gap-4 p-4 hover:bg-dark-surface/50 active:bg-dark-surface transition-colors rounded-2xl cursor-pointer mb-2 mx-2 group border border-transparent hover:border-dark-border ${
+                  unreadCount > 0 ? 'bg-dark-surface/30 border-primary-500/30' : ''}
+                `}
             >
                 <div className="relative">
                     <img 
@@ -65,11 +75,15 @@ const ChatItem: React.FC<ChatItemProps> = ({ chat, currentUser, onOpenChat, onDe
                         </span>
                     </div>
                     <div className="flex justify-between items-center">
-                        <p className="text-gray-400 text-sm truncate max-w-[80%]">{chat.last_message}</p>
-                        {/* Fake unread badge for enterprise feel */}
-                        {Math.random() > 0.8 && (
-                            <span className="bg-primary-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center shadow-md shadow-primary-900/50">
-                                {Math.floor(Math.random() * 3) + 1}
+                        <p className={`text-sm truncate max-w-[80%] ${
+                          unreadCount > 0 ? 'text-white font-medium' : 'text-gray-400'
+                        }`}>
+                          {chat.last_message}
+                        </p>
+                        {/* Real unread badge */}
+                        {unreadCount > 0 && (
+                            <span className="bg-primary-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center shadow-md shadow-primary-900/50 animate-pulse">
+                                {unreadCount > 99 ? '99+' : unreadCount}
                             </span>
                         )}
                     </div>
@@ -122,6 +136,7 @@ const ChatList: React.FC<ChatListProps> = ({ currentUser, onOpenChat, apiKey, on
   const [tempKey, setTempKey] = useState('');
   const [activeTab, setActiveTab] = useState<'all' | 'direct' | 'groups'>('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
 
   const loadChats = async () => {
     try {
@@ -176,10 +191,39 @@ const ChatList: React.FC<ChatListProps> = ({ currentUser, onOpenChat, apiKey, on
       });
     });
     
-    // Clean up subscription on unmount
+    // Set up real-time subscription for new messages
+    const messageSubscriptions = chats.map(chat => {
+      return mockDB.subscribeToChatMessages(chat.id, (newMessage) => {
+        console.log('New message received:', newMessage);
+        
+        // Update unread count if message is not from current user
+        if (newMessage.sender_id !== currentUser.id) {
+          setUnreadCounts(prev => ({
+            ...prev,
+            [chat.id]: (prev[chat.id] || 0) + 1
+          }));
+        }
+        
+        // Update chat last message and timestamp
+        setChats(prevChats => 
+          prevChats.map(c => 
+            c.id === chat.id 
+              ? { ...c, last_message: newMessage.content, updated_at: newMessage.created_at }
+              : c
+          )
+        );
+      });
+    });
+    
+    // Clean up subscriptions on unmount
     return () => {
-      console.log('Cleaning up real-time subscription for user chats:', currentUser.id);
+      console.log('Cleaning up real-time subscriptions for user chats:', currentUser.id);
       mockDB.unsubscribeFromChannel(`chats-${currentUser.id}`);
+      messageSubscriptions.forEach((sub, index) => {
+        if (chats[index]) {
+          mockDB.unsubscribeFromChannel(`messages-${chats[index].id}`);
+        }
+      });
     };
   }, [currentUser.id]);
 
@@ -295,7 +339,22 @@ const ChatList: React.FC<ChatListProps> = ({ currentUser, onOpenChat, apiKey, on
             <p className="text-sm font-medium">No active conversations found.</p>
           </div>
         ) : (
-          filteredChats.map(chat => <ChatItem key={chat.id} chat={chat} currentUser={currentUser} onOpenChat={onOpenChat} onDeleteChat={handleDeleteChat} />)
+          filteredChats.map(chat => (
+            <ChatItem 
+              key={chat.id} 
+              chat={chat} 
+              currentUser={currentUser} 
+              onOpenChat={onOpenChat} 
+              onDeleteChat={handleDeleteChat}
+              unreadCount={unreadCounts[chat.id] || 0}
+              onMarkAsRead={(chatId) => {
+                setUnreadCounts(prev => ({
+                  ...prev,
+                  [chatId]: 0
+                }));
+              }}
+            />
+          ))
         )}
       </div>
     </div>

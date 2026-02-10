@@ -16,6 +16,7 @@ import AddFriend from './pages/AddFriend';
 import Login from './pages/Login';
 import Stories from './pages/Stories';
 import Scan from './pages/Scan';
+import Notifications from './pages/Notifications';
 
 const App = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -121,6 +122,10 @@ const App = () => {
       
       {view === ViewState.STORIES && currentUser && (
           <Stories currentUser={currentUser} />
+      )}
+
+      {view === ViewState.NOTIFICATIONS && currentUser && (
+          <Notifications currentUser={currentUser} />
       )}
 
       {view === ViewState.SCAN && currentUser && (

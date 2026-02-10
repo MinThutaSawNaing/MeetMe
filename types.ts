@@ -17,6 +17,7 @@ export interface Message {
   created_at: string;
   is_ai_generated?: boolean;
   status?: 'sent' | 'delivered' | 'read';
+  is_read?: boolean; // Track if message is read by recipient
 }
 
 export interface Chat {
@@ -26,6 +27,7 @@ export interface Chat {
   updated_at: string;
   is_group?: boolean;
   group_name?: string;
+  unread_count?: number; // Track unread messages
 }
 
 export interface Friend {
@@ -54,9 +56,21 @@ export enum ViewState {
   CONTACTS = 'CONTACTS',
   ADD_FRIEND = 'ADD_FRIEND',
   PROFILE = 'PROFILE',
+  NOTIFICATIONS = 'NOTIFICATIONS',
 }
 
 export interface ChatCompletion {
   role: 'user' | 'model';
   parts: { text: string }[];
+}
+
+export interface Notification {
+  id: string;
+  user_id: string;
+  type: 'message' | 'login' | 'config_change' | 'system';
+  title: string;
+  message: string;
+  created_at: string;
+  is_read: boolean;
+  metadata?: Record<string, any>; // Additional data for the notification
 }

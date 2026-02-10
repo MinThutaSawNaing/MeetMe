@@ -556,6 +556,53 @@ export const supabaseDB = {
     }
   },
 
+  deleteStory: async (storyId: string): Promise<void> => {
+    checkSupabaseAvailability();
+    
+    if (!supabase) {
+      console.warn('Supabase not available, simulating story deletion');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('stories')
+        .delete()
+        .eq('id', storyId);
+
+      if (error) {
+        console.error('Error deleting story:', error);
+        throw error;
+      }
+    } catch (error) {
+      console.error('Error in deleteStory:', error);
+      throw error;
+    }
+  },
+
+  deleteStoryFile: async (fileName: string): Promise<void> => {
+    checkSupabaseAvailability();
+    
+    if (!supabase) {
+      console.warn('Supabase not available, simulating file deletion');
+      return;
+    }
+
+    try {
+      const { error } = await supabase.storage
+        .from('stories')
+        .remove([fileName]);
+
+      if (error) {
+        console.error('Error deleting story file:', error);
+        throw error;
+      }
+    } catch (error) {
+      console.error('Error in deleteStoryFile:', error);
+      throw error;
+    }
+  },
+
   // Real-time subscription methods
   subscribeToChatMessages: (chatId: string, callback: (message: Message) => void) => {
     if (!supabase) {

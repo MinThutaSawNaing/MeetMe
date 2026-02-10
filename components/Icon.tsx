@@ -28,7 +28,8 @@ import {
   CircleFadingPlus,
   Aperture,
   Trash2,
-  AlertTriangle
+  AlertTriangle,
+  Bell
 } from 'lucide-react';
 
 export const Icons = {
@@ -60,5 +61,6 @@ export const Icons = {
   Story: CircleFadingPlus,
   Aperture: Aperture,
   Trash2: Trash2,
-  AlertTriangle: AlertTriangle
+  AlertTriangle: AlertTriangle,
+  Bell: Bell
 };
