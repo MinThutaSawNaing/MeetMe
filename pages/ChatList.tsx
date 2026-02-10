@@ -7,8 +7,6 @@ import { Icons } from '../components/Icon';
 interface ChatListProps {
   currentUser: User;
   onOpenChat: (chatId: string) => void;
-  apiKey: string;
-  onSetApiKey: (key: string) => void;
 }
 
 interface ChatItemProps {
@@ -129,10 +127,8 @@ const ChatItem: React.FC<ChatItemProps> = ({ chat, currentUser, onOpenChat, onDe
     );
 };
 
-const ChatList: React.FC<ChatListProps> = ({ currentUser, onOpenChat, apiKey, onSetApiKey }) => {
+const ChatList: React.FC<ChatListProps> = ({ currentUser, onOpenChat }) => {
   const [filteredChats, setFilteredChats] = useState<Chat[]>([]);
-  const [showKeyModal, setShowKeyModal] = useState(false);
-  const [tempKey, setTempKey] = useState('');
   const [activeTab, setActiveTab] = useState<'all' | 'direct' | 'groups'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
@@ -232,15 +228,6 @@ const ChatList: React.FC<ChatListProps> = ({ currentUser, onOpenChat, apiKey, on
                  <p className="text-gray-500 text-xs uppercase tracking-wider font-semibold">{currentUser.status || 'Offline'}</p>
             </div>
         </div>
-        {!apiKey && (
-            <button 
-                onClick={() => setShowKeyModal(true)}
-                className="bg-gradient-to-r from-primary-600 to-primary-800 text-white p-2 rounded-xl shadow-lg shadow-primary-900/20 hover:scale-105 transition-transform"
-                title="Enable Enterprise AI"
-            >
-                <Icons.Sparkles size={20} />
-            </button>
-        )}
       </header>
 
       {/* Enterprise Search Bar */}
@@ -271,44 +258,7 @@ const ChatList: React.FC<ChatListProps> = ({ currentUser, onOpenChat, apiKey, on
           ))}
       </div>
 
-      {/* AI Key Modal */}
-      {showKeyModal && (
-          <div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
-              <div className="bg-dark-surface border border-dark-border p-6 rounded-3xl w-full max-w-xs animate-pop shadow-2xl">
-                  <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-xl font-bold">Activate Intelligence</h2>
-                    <Icons.Bot className="text-primary-500" />
-                  </div>
-                  <p className="text-gray-400 text-sm mb-6 leading-relaxed">
-                      Enter your Gemini API key to unlock <span className="text-white font-semibold">Smart Summaries</span>, <span className="text-white font-semibold">Auto-Translation</span>, and <span className="text-white font-semibold">AI Responses</span>.
-                  </p>
-                  <input 
-                    type="password" 
-                    placeholder="Paste API Key here"
-                    className="w-full bg-dark-bg border border-dark-border rounded-xl p-3 mb-4 focus:border-primary-500 outline-none transition-colors"
-                    value={tempKey}
-                    onChange={(e) => setTempKey(e.target.value)}
-                  />
-                  <div className="flex gap-3">
-                      <button 
-                        onClick={() => setShowKeyModal(false)}
-                        className="flex-1 py-3 text-gray-400 hover:text-white font-medium"
-                      >
-                          Later
-                      </button>
-                      <button 
-                        onClick={() => {
-                            onSetApiKey(tempKey);
-                            setShowKeyModal(false);
-                        }}
-                        className="flex-1 bg-primary-600 rounded-xl py-3 font-bold hover:bg-primary-500 text-white shadow-lg shadow-primary-600/20"
-                      >
-                          Activate
-                      </button>
-                  </div>
-              </div>
-          </div>
-      )}
+
 
       <div className="flex-1 overflow-y-auto no-scrollbar space-y-1 mt-2">
         {loading ? (
