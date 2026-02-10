@@ -63,14 +63,6 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentView, onChangeV
           </button>
 
           <button 
-            onClick={() => onChangeView(ViewState.CONTACTS)}
-            className={`flex flex-col items-center gap-1 transition-all w-14 ${currentView === ViewState.CONTACTS || currentView === ViewState.ADD_FRIEND ? 'text-primary-500' : 'text-gray-500 hover:text-gray-300'}`}
-          >
-            <Icons.Users size={24} fill={currentView === ViewState.CONTACTS ? "currentColor" : "none"} />
-            <span className="text-[10px] font-medium">Contacts</span>
-          </button>
-
-          <button 
             onClick={() => onChangeView(ViewState.PROFILE)}
             className={`flex flex-col items-center gap-1 transition-all w-14 ${currentView === ViewState.PROFILE ? 'text-primary-500' : 'text-gray-500 hover:text-gray-300'}`}
           >

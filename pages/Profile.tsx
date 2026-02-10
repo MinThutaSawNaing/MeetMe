@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { User } from '../types';
+import React, { useState, useEffect, useRef } from 'react';
+import { User, Friend } from '../types';
 import { supabaseDB as mockDB, supabaseAuth as authDB } from '../services/supabaseService';
 import ImageCompressionService from '../services/imageCompressionService';
 import { Icons } from '../components/Icon';
@@ -9,9 +9,11 @@ interface ProfileProps {
   onLogout: () => void;
   apiKey: string;
   setApiKey: (key: string) => void;
+  onOpenChat: (chatId: string) => void;
+  onAddFriend: () => void;
 }
 
-const Profile: React.FC<ProfileProps> = ({ currentUser, onLogout, apiKey, setApiKey }) => {
+const Profile: React.FC<ProfileProps> = ({ currentUser, onLogout, apiKey, setApiKey, onOpenChat, onAddFriend }) => {
   const [editing, setEditing] = useState(false);
   const [username, setUsername] = useState(currentUser.username);
   const [jobTitle, setJobTitle] = useState(currentUser.job_title || '');
@@ -21,6 +23,8 @@ const Profile: React.FC<ProfileProps> = ({ currentUser, onLogout, apiKey, setApi
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [contacts, setContacts] = useState<Friend[]>([]);
+  const [loadingContacts, setLoadingContacts] = useState<boolean>(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleSave = async () => {
@@ -138,6 +142,23 @@ const Profile: React.FC<ProfileProps> = ({ currentUser, onLogout, apiKey, setApi
     setShowKeyInput(false);
   };
 
+  const loadContacts = async () => {
+    try {
+      const data = await mockDB.getFriends(currentUser.id);
+      setContacts(data);
+      setLoadingContacts(false);
+    } catch (error) {
+      console.error('Error loading contacts:', error);
+      setLoadingContacts(false);
+    }
+  };
+
+  const startChat = async (friendId: string) => {
+    // Find or create a chat with this friend
+    const chat = await mockDB.createChat([currentUser.id, friendId]);
+    onOpenChat(chat.id);
+  };
+
   const getStatusColor = (statusValue: string) => {
     switch(statusValue) {
       case 'online': return 'from-green-500 to-emerald-400';
@@ -155,6 +176,16 @@ const Profile: React.FC<ProfileProps> = ({ currentUser, onLogout, apiKey, setApi
       default: return 'bg-gray-500/20 border-gray-500/30';
     }
   };
+
+  useEffect(() => {
+    loadContacts();
+    
+    // In a real app, we would set up a subscription for friend updates
+    // For now, we'll just refresh periodically
+    const interval = setInterval(loadContacts, 5000);
+    
+    return () => clearInterval(interval);
+  }, [currentUser.id]);
 
   return (
     <div className="flex flex-col h-full pt-6 pb-20 bg-gradient-to-br from-dark-bg to-dark-surface">
@@ -301,7 +332,70 @@ const Profile: React.FC<ProfileProps> = ({ currentUser, onLogout, apiKey, setApi
             )}
           </div>
         </div>
-
+        
+        {/* Contacts Section */}
+        <div className="backdrop-blur-xl bg-dark-surface/30 border border-dark-border/50 rounded-2xl p-5 shadow-xl">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="font-bold text-white text-lg flex items-center gap-2">
+              <Icons.Users size={20} className="text-blue-400" />
+              Contacts
+            </h3>
+            <button 
+              onClick={onAddFriend}
+              className="bg-primary-600 hover:bg-primary-500 text-white p-1.5 rounded-xl shadow-lg shadow-primary-900/20"
+            >
+              <Icons.Plus size={16} />
+            </button>
+          </div>
+                
+          <div className="relative mb-2">
+            <Icons.Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 transition-colors" size={16} />
+            <input 
+              type="text" 
+              placeholder="Search contacts..." 
+              className="w-full bg-dark-bg/50 border border-dark-border/50 rounded-xl py-2 pl-10 pr-4 text-sm focus:outline-none focus:border-primary-500 transition-all placeholder-gray-500"
+            />
+          </div>
+                
+          <div className="max-h-40 overflow-y-auto no-scrollbar">
+            {loadingContacts ? (
+              <div className="flex justify-center p-4">
+                <div className="w-5 h-5 border-2 border-primary-500 border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            ) : contacts.length === 0 ? (
+              <div className="text-center p-4 opacity-50">
+                <p className="text-sm font-medium">No contacts yet.</p>
+                <button 
+                  onClick={onAddFriend}
+                  className="mt-2 text-primary-500 hover:text-primary-400 font-medium text-sm"
+                >
+                  Add your first contact
+                </button>
+              </div>
+            ) : (
+              contacts.map(contact => (
+                contact.friend_data && (
+                  <div 
+                    key={contact.id}
+                    className="flex items-center gap-3 p-2 hover:bg-dark-bg/50 active:bg-dark-bg/70 transition-colors rounded-xl cursor-pointer mb-1"
+                    onClick={() => contact.friend_data && startChat(contact.friend_data.id)}
+                  >
+                    <img 
+                      src={contact.friend_data.avatar_url} 
+                      alt={contact.friend_data.username} 
+                      className="w-8 h-8 rounded-full object-cover border border-dark-border"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-medium text-white text-sm truncate">{contact.friend_data.username}</h4>
+                      <p className="text-gray-400 text-xs truncate max-w-[80%]">{contact.friend_data.job_title}</p>
+                    </div>
+                  </div>
+                )
+              ))
+            )}
+          </div>
+        </div>
+        
         {/* Action Cards */}
         <div className="space-y-4">
           {/* AI Integration Card */}

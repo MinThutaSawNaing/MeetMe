@@ -143,18 +143,10 @@ const App = () => {
         />
       )}
 
-      {view === ViewState.CONTACTS && currentUser && (
-        <Contacts 
-            currentUser={currentUser} 
-            onOpenChat={(id) => handleOpenChat(id)}
-            onAddFriend={() => setView(ViewState.ADD_FRIEND)}
-        />
-      )}
-
       {view === ViewState.ADD_FRIEND && currentUser && (
         <AddFriend 
             currentUser={currentUser}
-            onBack={() => setView(ViewState.CONTACTS)}
+            onBack={() => setView(ViewState.PROFILE)}
         />
       )}
 
@@ -164,6 +156,8 @@ const App = () => {
             onLogout={handleLogout}
             apiKey={apiKey}
             setApiKey={handleApiKeySubmit}
+            onOpenChat={handleOpenChat}
+            onAddFriend={() => setView(ViewState.ADD_FRIEND)}
         />
       )}
     </Layout>
