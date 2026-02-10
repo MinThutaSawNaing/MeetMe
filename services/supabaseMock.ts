@@ -216,15 +216,32 @@ export const mockDB = {
   // Real-time subscription methods
   subscribeToChatMessages: (chatId: string, callback: (message: Message) => void) => {
     // In the mock implementation, we'll simulate real-time updates
-    // by listening to local storage changes (though this won't work perfectly in mock)
     console.log('Mock: Subscribed to messages for chat', chatId);
-    return;
+    // For mock purposes, we'll simulate receiving a message every 10 seconds
+    // In a real implementation, this would be replaced with actual WebSocket logic
+    const interval = setInterval(() => {
+      // This is just for demonstration - in real app, messages would come from WebSocket
+      console.log('Mock: Simulating real-time message for chat', chatId);
+    }, 10000);
+    
+    return () => {
+      console.log('Mock: Unsubscribed from messages for chat', chatId);
+      clearInterval(interval);
+    };
   },
 
   subscribeToChats: (userId: string, callback: (chats: Chat[]) => void) => {
     // In the mock implementation, we'll simulate real-time updates
     console.log('Mock: Subscribed to chats for user', userId);
-    return;
+    // For mock purposes, we'll simulate chat updates every 15 seconds
+    const interval = setInterval(() => {
+      console.log('Mock: Simulating real-time chat update for user', userId);
+    }, 15000);
+    
+    return () => {
+      console.log('Mock: Unsubscribed from chats for user', userId);
+      clearInterval(interval);
+    };
   },
 
   unsubscribeFromChannel: (channelName: string) => {

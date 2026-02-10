@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { User, Message } from '../types';
 import { supabaseDB as mockDB } from '../services/supabaseService';
+import { notificationService } from '../services/notificationService';
 import { generateSmartReply, chatWithBot, summarizeChat, translateMessage } from '../services/geminiService';
 import { Icons } from '../components/Icon';
 
@@ -44,25 +45,75 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, chatId, onBack, apiKey
     const loadMsgs = async () => {
         const msgs = await mockDB.getMessages(chatId);
         setMessages(msgs);
+        
+        // Mark messages as read when chat is opened
+        try {
+          await mockDB.markMessagesAsRead(chatId, currentUser.id);
+        } catch (error) {
+          console.error('Error marking messages as read:', error);
+        }
     };
     loadMsgs();
-  }, [chatId]);
+  }, [chatId, currentUser.id]);
   
   useEffect(() => {
     console.log('Setting up real-time subscription for chat:', chatId);
     
+    // Initialize notification service
+    notificationService.initialize();
+    
     // Set up real-time subscription for new messages
-    const messageSubscription = mockDB.subscribeToChatMessages(chatId, (newMessage) => {
+    const unsubscribe = mockDB.subscribeToChatMessages(chatId, async (newMessage) => {
       console.log('Received real-time message:', newMessage);
+      
+      // Show notification if message is from another user and app is not focused
+      if (newMessage.sender_id !== currentUser.id && !notificationService.isAppFocused()) {
+        try {
+          // Get sender info to display in notification
+          const sender = await mockDB.getUserById(newMessage.sender_id);
+          
+          notificationService.showNotification({
+            title: sender?.username || 'New Message',
+            body: newMessage.content.substring(0, 50) + (newMessage.content.length > 50 ? '...' : ''),
+            data: {
+              chatId: chatId,
+              senderId: newMessage.sender_id,
+              senderName: sender?.username
+            }
+          });
+        } catch (error) {
+          console.error('Error getting sender info for notification:', error);
+        }
+      }
+      
       setMessages(prev => {
         // Avoid duplicate messages by checking if message already exists
         const exists = prev.some(msg => msg.id === newMessage.id);
         if (!exists) {
-          // Add new message and sort by timestamp to maintain order
-          const updatedMessages = [...prev, newMessage];
-          return updatedMessages.sort((a, b) => 
-            new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+          // Check for optimistic update duplicates (same content from same sender within last 2 seconds)
+          const isDuplicateOptimistic = prev.some(msg => 
+            msg.sender_id === newMessage.sender_id &&
+            msg.content === newMessage.content &&
+            msg.id === 'temp' &&
+            new Date(newMessage.created_at).getTime() - new Date(msg.created_at).getTime() < 2000
           );
+          
+          if (isDuplicateOptimistic) {
+            // Replace the temporary optimistic message with the real one
+            return prev.map(msg => 
+              msg.id === 'temp' && 
+              msg.sender_id === newMessage.sender_id && 
+              msg.content === newMessage.content
+                ? { ...newMessage, status: 'sent' }
+                : msg
+            );
+          } else {
+            // Add new message and sort by timestamp to maintain order
+            const updatedMessages = [...prev, newMessage];
+            return updatedMessages.sort((a, b) => 
+              new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+            );
+          }
         }
         return prev;
       });
@@ -71,9 +122,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, chatId, onBack, apiKey
     // Clean up subscription on unmount
     return () => {
       console.log('Cleaning up real-time subscription for chat:', chatId);
-      mockDB.unsubscribeFromChannel(`messages-${chatId}`);
+      unsubscribe();
     };
-  }, [chatId]);
+  }, [chatId, currentUser.id]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -102,7 +153,11 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, chatId, onBack, apiKey
       // Update the temp message with the real one from DB
       setMessages(prev => 
         prev.map(msg => 
-          msg.id === 'temp' && msg.content === text 
+          msg.id === 'temp' && 
+          msg.sender_id === currentUser.id && 
+          msg.content === text &&
+          // Additional safety check: ensure we're replacing the most recent temp message
+          prev.filter(m => m.id === 'temp' && m.sender_id === currentUser.id).pop() === msg
             ? { ...sentMessage, status: 'sent' } // Use the actual message from DB
             : msg
         )

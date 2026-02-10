@@ -1,6 +1,5 @@
 import { supabase, checkSupabaseAvailability, isSupabaseAvailable } from './supabaseClient';
 import { User, Chat, Message, Friend, Story } from '../types';
-import { wsManager } from './websocketService';
 
 // Delay utility function
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -117,6 +116,102 @@ export const supabaseDB = {
       return data as Message[];
     } catch (error) {
       console.error('Error in getMessages:', error);
+      throw error;
+    }
+  },
+
+  // Get unread message count for a chat for a specific user
+  getUnreadMessageCount: async (chatId: string, userId: string): Promise<number> => {
+    checkSupabaseAvailability();
+    
+    if (!supabase) {
+      console.warn('Supabase not available, returning 0 unread count');
+      return 0;
+    }
+
+    try {
+      // Get all messages in the chat except those sent by the user
+      const { data: messages, error } = await supabase
+        .from('messages')
+        .select('id, sender_id, read_by')
+        .eq('chat_id', chatId)
+        .neq('sender_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching messages for unread count:', error);
+        throw error;
+      }
+
+      // Count messages that haven't been read by the user
+      const unreadCount = messages?.filter(msg => 
+        !msg.read_by || !msg.read_by.includes(userId)
+      ).length || 0;
+
+      return unreadCount;
+    } catch (error) {
+      console.error('Error in getUnreadMessageCount:', error);
+      return 0;
+    }
+  },
+
+  // Mark messages as read
+  markMessagesAsRead: async (chatId: string, userId: string, messageIds?: string[]): Promise<void> => {
+    checkSupabaseAvailability();
+    
+    if (!supabase) {
+      console.warn('Supabase not available, cannot mark messages as read');
+      return;
+    }
+
+    try {
+      // For now, we'll need to fetch messages first and then update them
+      // since array_append in Supabase can be tricky with TypeScript
+      const { data: messagesToUpdate, error: fetchError } = await supabase
+        .from('messages')
+        .select('id, read_by')
+        .eq('chat_id', chatId)
+        .neq('sender_id', userId)
+        .not('read_by', 'cs', `{${userId}}`);
+
+      if (fetchError) {
+        console.error('Error fetching messages to mark as read:', fetchError);
+        throw fetchError;
+      }
+
+      if (messagesToUpdate && messagesToUpdate.length > 0) {
+        // Update each message individually to add the user to read_by array
+        for (const message of messagesToUpdate) {
+          const updatedReadBy = message.read_by ? [...message.read_by, userId] : [userId];
+          
+          const { error: updateError } = await supabase
+            .from('messages')
+            .update({ 
+              read_by: updatedReadBy,
+              status: 'read'
+            })
+            .eq('id', message.id);
+
+          if (updateError) {
+            console.error('Error updating message read status:', updateError);
+          }
+        }
+      }
+
+      // Handle specific message IDs if provided
+      if (messageIds && messageIds.length > 0) {
+        const { error: specificError } = await supabase
+          .from('messages')
+          .update({ status: 'read' })
+          .in('id', messageIds);
+          
+        if (specificError) {
+          console.error('Error updating specific messages:', specificError);
+        }
+      }
+        
+    } catch (error) {
+      console.error('Error in markMessagesAsRead:', error);
       throw error;
     }
   },
@@ -607,12 +702,13 @@ export const supabaseDB = {
   subscribeToChatMessages: (chatId: string, callback: (message: Message) => void) => {
     if (!supabase) {
       console.warn('Supabase not available, cannot subscribe to messages');
-      return;
+      return () => {};
     }
 
     // Unsubscribe if already subscribed
     if (realTimeSubscriptions[`messages-${chatId}`]) {
       realTimeSubscriptions[`messages-${chatId}`].unsubscribe();
+      delete realTimeSubscriptions[`messages-${chatId}`];
     }
 
     console.log('Setting up real-time subscription for chat:', chatId);
@@ -650,13 +746,17 @@ export const supabaseDB = {
         console.log('Real-time channel closed for chat:', chatId);
       }
     });
-
-    const subscription = channel.subscribe();
     
     // Store the channel for cleanup
     realTimeSubscriptions[`messages-${chatId}`] = channel;
     
-    return subscription;
+    return () => {
+      console.log('Unsubscribing from real-time messages for chat:', chatId);
+      if (realTimeSubscriptions[`messages-${chatId}`]) {
+        realTimeSubscriptions[`messages-${chatId}`].unsubscribe();
+        delete realTimeSubscriptions[`messages-${chatId}`];
+      }
+    };
   },
 
   subscribeToChats: (userId: string, callback: (chats: Chat[]) => void) => {
@@ -727,7 +827,10 @@ export const supabaseDB = {
     });
 
     const subscription = channel.subscribe();
+    
+    // Store the channel for cleanup
     realTimeSubscriptions[`chats-${userId}`] = channel;
+    
     return subscription;
   },
 
@@ -980,6 +1083,62 @@ export const supabaseAuth = {
 
     // If not in session storage, return null
     return null;
+  },
+
+  /**
+   * Upload user avatar with automatic compression
+   * @param userId - The user ID
+   * @param file - The image file to upload
+   * @returns Promise<string> - The URL of the uploaded avatar
+   */
+  uploadAvatar: async (userId: string, file: File): Promise<string> => {
+    checkSupabaseAvailability();
+    
+    if (!supabase) {
+      console.warn('Supabase not available, returning mock URL');
+      return URL.createObjectURL(file);
+    }
+
+    try {
+      // Create avatars bucket if it doesn't exist
+      const { data: buckets } = await supabase.storage.listBuckets();
+      const avatarsBucket = buckets?.find(bucket => bucket.name === 'avatars');
+      
+      if (!avatarsBucket) {
+        await supabase.storage.createBucket('avatars', {
+          public: true,
+          fileSizeLimit: 1024 * 1024 * 2, // 2MB limit
+          allowedMimeTypes: ['image/*']
+        });
+      }
+
+      // Generate unique filename
+      const fileExtension = file.name.split('.').pop() || 'jpg';
+      const fileName = `${userId}_${Date.now()}.${fileExtension}`;
+      
+      // Upload file to avatars bucket
+      const { data, error } = await supabase.storage
+        .from('avatars')
+        .upload(fileName, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (error) {
+        console.error('Error uploading avatar:', error);
+        throw error;
+      }
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(fileName);
+
+      return publicUrl;
+    } catch (error) {
+      console.error('Error in uploadAvatar:', error);
+      throw error;
+    }
   }
 };
 

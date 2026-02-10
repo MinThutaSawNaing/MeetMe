@@ -1,105 +1,158 @@
-# MeetMe - Real Time Chat Application
+# MeetMe - Modern Chat Application
 
-
-
-## Overview
-
-MeetMe is a modern, real-time chat application built with React and powered by Supabase backend services. The app features enterprise-grade messaging capabilities with AI integration for smart replies, summaries, and translation.
+A feature-rich chat application built with React, TypeScript, and modern web technologies.
 
 ## Features
 
-- 💬 **Real-time Messaging**: Instant messaging with delivery status indicators
-- 👥 **Contact Management**: Add friends, manage contacts, and scan QR codes
-- 📸 **Stories**: Share moments with temporary story posts
-- 🤖 **AI Integration**: Smart replies, conversation summaries, and translation powered by Google Gemini
-- 🔐 **Secure Authentication**: User authentication with Supabase Auth
-- 🌙 **Dark Theme**: Beautiful dark-themed UI optimized for night use
-- 📱 **Responsive Design**: Works seamlessly across devices
+- **Email/Password Authentication**: Secure user authentication using Supabase Auth
+- **Real-time Messaging**: Instant message delivery using Supabase real-time
+- **Push Notifications**: Native push notifications for new messages (works with Media.io native apps)
+- **Web Notifications**: Browser notifications for new messages
+- **User Management**: Create accounts, login, and password reset functionality
+- **Chat Management**: Create and manage individual and group chats
+- **AI Integration**: Smart replies and chat summarization using Google Gemini
+- **Story Sharing**: Share photos and videos with automatic expiration
+- **QR Code Scanning**: Add friends via QR code scanning
+- **Modern UI**: Glassmorphism design with vibrant gradients
+- **Responsive Design**: Works on mobile and desktop devices
 
-## Tech Stack
+## Technology Stack
 
-- **Frontend**: React 19 with TypeScript
-- **Backend**: Supabase (PostgreSQL, Auth, Realtime)
-- **AI**: Google Gemini API
-- **UI**: Custom styled components
-- **Build Tool**: Vite
+- **Frontend**: React 19, TypeScript, Vite
+- **Backend**: Supabase (Database, Authentication, Storage, Real-time)
+- **AI Services**: Google Gemini API
+- **UI Components**: Lucide React icons
+- **QR Code**: @zxing/library for scanning
 
 ## Getting Started
 
 ### Prerequisites
 
-- Node.js (v18 or higher)
-- A Supabase account
-- A Google Gemini API key (optional, for AI features)
+- Node.js (v16 or higher)
+- npm or yarn
+- Supabase account and project
 
 ### Installation
 
 1. Clone the repository:
-   ```bash
-   git clone https://github.com/MinThutaSawNaing/MeetMe.git
-   cd MeetMe
-   ```
+```bash
+git clone <repository-url>
+cd meetme
+```
 
 2. Install dependencies:
-   ```bash
-   npm install
-   ```
+```bash
+npm install
+```
 
 3. Set up environment variables:
-   Create a `.env` file in the root directory with the following:
-   ```env
-   VITE_SUPABASE_URL=your_supabase_project_url
-   VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
-   ```
+Create a `.env` file in the root directory:
+```env
+VITE_SUPABASE_URL=your_supabase_url
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+```
 
-4. Run the application:
-   ```bash
-   npm run dev
-   ```
+4. Set up Supabase:
+   - Create a new Supabase project
+   - Enable Email authentication provider
+   - Run the SQL setup scripts from the `supabase/` directory
+   - Configure storage buckets for stories
+   - Enable real-time for messages, chats, and users tables
 
-## Supabase Setup
+### Running the Application
 
-1. Create a new project at [supabase.io](https://supabase.io)
-2. Copy your Project URL and Anonymous Key from Project Settings
-3. Execute the schema from `supabase/schema.sql` in your Supabase SQL Editor
-4. Configure Row Level Security (RLS) policies as defined in the schema
+```bash
+# Start development server
+npm run dev
+```
 
-## Environment Variables
+The application will be available at `http://localhost:5173`.
 
-- `VITE_SUPABASE_URL`: Your Supabase project URL
-- `VITE_SUPABASE_ANON_KEY`: Your Supabase anonymous API key
-- `VITE_GEMINI_API_KEY`: (Optional) Your Google Gemini API key for AI features
+## Authentication Setup
 
-## Project Structure
+### Supabase Configuration:
+
+1. **Enable Email Authentication**:
+   - Go to Supabase Dashboard → Authentication → Providers
+   - Enable the Email provider
+   - Configure email templates as needed
+
+2. **Enable Real-time**:
+   - Go to Supabase Dashboard → Database → Realtime
+   - Enable real-time for `messages`, `chats`, and `users` tables
+
+3. **Configure Site URL** (for password reset):
+   - Go to Supabase Dashboard → Authentication → URL Configuration
+   - Set your Site URL to your deployment URL
+
+## Real-time Communication Architecture
+
+This application uses Supabase's built-in real-time features for instant message delivery and chat updates.
+
+### Key Components:
+
+1. **Supabase Real-time Subscriptions**:
+   - Automatic message broadcasting using PostgreSQL changes
+   - Real-time chat list updates
+   - User status synchronization
+   - Built-in connection management
+
+2. **Integration Points**:
+   - `ChatRoom.tsx`: Real-time message receiving
+   - `ChatList.tsx`: Chat updates and user status
+   - `App.tsx`: Subscription management
+
+Supabase handles all the real-time infrastructure, providing:
+- Reliable WebSocket connections
+- Automatic reconnection
+- PostgreSQL change tracking
+- Scalable real-time delivery
+- No additional server costs
+
+## Development
+
+### Project Structure
 
 ```
+meetme/
 ├── components/          # Reusable UI components
-├── pages/              # Page components
-├── services/           # Backend service integrations
-│   ├── supabaseClient.ts
-│   ├── supabaseService.ts
-│   └── geminiService.ts
-├── supabase/           # Supabase schema
-│   └── schema.sql
+├── pages/              # Main application pages
+├── services/           # Business logic and API services
+├── supabase/           # Database setup and configuration
 ├── types.ts            # TypeScript type definitions
-└── App.tsx             # Main application component
+└── ...
 ```
+
+### Key Services
+
+- `authService.ts`: Email/password authentication and session management
+- `supabaseService.ts`: Database operations and real-time subscriptions
+- `notificationService.ts`: Unified notification system for web and native apps
+- `geminiService.ts`: AI-powered features
+- `supabaseClient.ts`: Supabase client configuration
+
+## Deployment
+
+### Frontend
+Build the application:
+```bash
+npm run build
+```
+
+Deploy the `dist/` folder to your preferred hosting platform (Netlify, Vercel, etc.).
 
 ## Contributing
 
-Contributions are welcome! Feel free to submit a Pull Request.
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test thoroughly
+5. Submit a pull request
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Acknowledgments
-
-- Built with React and TypeScript
-- Powered by Supabase for real-time backend services
-- AI features powered by Google Gemini
-- Icons from Lucide React
+This project is licensed under the MIT License.
 
 ## Support
 
-For support, please open an issue in the GitHub repository.
+For issues and questions, please open an issue on the GitHub repository.
