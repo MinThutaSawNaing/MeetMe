@@ -223,10 +223,18 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, chatId, onBack, apiKey
             </div>
         )}
         <div className="flex items-center gap-1">
-             <button className="p-2 hover:bg-white/10 rounded-full text-primary-400" title="Voice Call">
+             <button 
+                className="p-2 hover:bg-white/10 rounded-full text-primary-400" 
+                title="Voice Call (Mocked)"
+                onClick={() => alert('Voice call feature is not implemented yet')}
+            >
                 <Icons.Phone size={20} />
             </button>
-            <button className="p-2 hover:bg-white/10 rounded-full text-primary-400" title="Video Call">
+            <button 
+                className="p-2 hover:bg-white/10 rounded-full text-primary-400" 
+                title="Video Call (Mocked)"
+                onClick={() => alert('Video call feature is not implemented yet')}
+            >
                 <Icons.Video size={20} />
             </button>
             <button 

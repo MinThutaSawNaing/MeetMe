@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClient } from './services/queryClient';
 import { Layout } from './components/Layout';
 import { ViewState, User, Chat } from './types';
 import { supabaseDB as mockDB } from './services/supabaseService';
@@ -108,15 +110,16 @@ const App = () => {
   }
 
   return (
-    <Layout currentView={view} onChangeView={setView}>
-      {view === ViewState.CHATS && currentUser && (
-        <ChatList 
-          currentUser={currentUser} 
-          onOpenChat={handleOpenChat} 
-          apiKey={apiKey}
-          onSetApiKey={handleApiKeySubmit}
-        />
-      )}
+    <QueryClientProvider client={queryClient}>
+      <Layout currentView={view} onChangeView={setView}>
+        {view === ViewState.CHATS && currentUser && (
+          <ChatList 
+            currentUser={currentUser} 
+            onOpenChat={handleOpenChat} 
+            apiKey={apiKey}
+            onSetApiKey={handleApiKeySubmit}
+          />
+        )}
       
       {view === ViewState.STORIES && currentUser && (
           <Stories currentUser={currentUser} />
@@ -161,7 +164,8 @@ const App = () => {
         />
       )}
     </Layout>
-  );
+  </QueryClientProvider>
+);
 };
 
 export default App;

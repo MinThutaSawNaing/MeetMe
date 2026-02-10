@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { User, Chat } from '../types';
 import { supabaseDB as mockDB } from '../services/supabaseService';
+import { useChats } from '../hooks/useChats';
 import { Icons } from '../components/Icon';
 
 interface ChatListProps {
@@ -129,38 +130,47 @@ const ChatItem: React.FC<ChatItemProps> = ({ chat, currentUser, onOpenChat, onDe
 };
 
 const ChatList: React.FC<ChatListProps> = ({ currentUser, onOpenChat, apiKey, onSetApiKey }) => {
-  const [chats, setChats] = useState<Chat[]>([]);
   const [filteredChats, setFilteredChats] = useState<Chat[]>([]);
-  const [loading, setLoading] = useState(true);
   const [showKeyModal, setShowKeyModal] = useState(false);
   const [tempKey, setTempKey] = useState('');
   const [activeTab, setActiveTab] = useState<'all' | 'direct' | 'groups'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
+  const [newMessagesIndicator, setNewMessagesIndicator] = useState(false);
 
-  const loadChats = async () => {
-    try {
-      const data = await mockDB.getChats(currentUser.id);
-      setChats(data);
-      if (loading) setLoading(false);
-    } catch (error) {
-      console.error('Error loading chats:', error);
-      if (loading) setLoading(false);
-      alert('Failed to load chats. Please try again later.');
+  // Use TanStack Query for chat data
+  const { data: chats = [], isLoading: loading, isError, error } = useChats(currentUser.id);
+
+  // Show notification when new messages arrive
+  useEffect(() => {
+    if (chats.length > 0) {
+      // Check if any chat has unread messages
+      const hasUnread = chats.some(chat => {
+        const unreadCount = unreadCounts[chat.id] || 0;
+        return unreadCount > 0;
+      });
+      
+      if (hasUnread) {
+        setNewMessagesIndicator(true);
+        // Auto-hide the indicator after 3 seconds
+        const timer = setTimeout(() => {
+          setNewMessagesIndicator(false);
+        }, 3000);
+        return () => clearTimeout(timer);
+      }
     }
-  };
+  }, [chats, unreadCounts]);
 
   const handleDeleteChat = async (chatId: string, deleteType: 'forMe' | 'completely') => {
     try {
       if (deleteType === 'forMe') {
-        // For now, just remove from local state (in real app, would mark as hidden)
-        setChats(prev => prev.filter(chat => chat.id !== chatId));
+        // For now, just show a message (in real app, would mark as hidden)
+        alert('Chat marked as deleted for you');
         await mockDB.deleteChatForUser(chatId);
       } else {
         // Completely remove from database
         await mockDB.deleteChatCompletely(chatId);
-        // Refresh chat list
-        loadChats();
+        // The query will automatically refetch due to refetchInterval
       }
     } catch (error) {
       console.error('Error deleting chat:', error);
@@ -169,26 +179,13 @@ const ChatList: React.FC<ChatListProps> = ({ currentUser, onOpenChat, apiKey, on
   };
 
   useEffect(() => {
-    loadChats();
-    
     console.log('Setting up real-time subscription for user chats:', currentUser.id);
     
     // Set up real-time subscription for chat updates
     const chatSubscription = mockDB.subscribeToChats(currentUser.id, (updatedChats) => {
       console.log('Received real-time chat updates:', updatedChats.length);
-      setChats(prevChats => {
-        // Update chats with new data while preserving order
-        const updatedChatMap = new Map(updatedChats.map(chat => [chat.id, chat]));
-        const preservedOrder = prevChats.map(prevChat => 
-          updatedChatMap.has(prevChat.id) ? updatedChatMap.get(prevChat.id)! : prevChat
-        );
-        
-        // Add any new chats that weren't in the previous list
-        const existingIds = new Set(preservedOrder.map(chat => chat.id));
-        const newChats = updatedChats.filter(chat => !existingIds.has(chat.id));
-        
-        return [...newChats, ...preservedOrder];
-      });
+      // The TanStack Query will handle the data refresh automatically
+      // This is just for logging and any additional side effects
     });
     
     // Set up real-time subscription for new messages
@@ -202,16 +199,12 @@ const ChatList: React.FC<ChatListProps> = ({ currentUser, onOpenChat, apiKey, on
             ...prev,
             [chat.id]: (prev[chat.id] || 0) + 1
           }));
+          // Show new messages indicator
+          setNewMessagesIndicator(true);
         }
         
-        // Update chat last message and timestamp
-        setChats(prevChats => 
-          prevChats.map(c => 
-            c.id === chat.id 
-              ? { ...c, last_message: newMessage.content, updated_at: newMessage.created_at }
-              : c
-          )
-        );
+        // The TanStack Query will automatically refresh the chat list
+        // due to the refetchInterval setting
       });
     });
     
@@ -225,7 +218,7 @@ const ChatList: React.FC<ChatListProps> = ({ currentUser, onOpenChat, apiKey, on
         }
       });
     };
-  }, [currentUser.id]);
+  }, [currentUser.id, chats]);
 
   useEffect(() => {
     let result = chats;
@@ -240,9 +233,21 @@ const ChatList: React.FC<ChatListProps> = ({ currentUser, onOpenChat, apiKey, on
     setFilteredChats(result);
   }, [chats, activeTab, searchTerm]);
 
+  // Handle search functionality
+  useEffect(() => {
+    if (searchTerm) {
+      const filtered = chats.filter(chat => 
+        chat.last_message.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+      setFilteredChats(filtered);
+    } else {
+      setFilteredChats(chats);
+    }
+  }, [chats, searchTerm]);
+
   return (
     <div className="flex flex-col h-full pt-6 pb-20">
-      <header className="px-6 mb-4 flex justify-between items-start">
+      <header className="px-6 mb-4 flex justify-between items-start relative">
         <div>
             <h1 className="text-2xl font-bold tracking-tight text-white">MeetMe</h1>
             <div className="flex items-center gap-2 mt-1">
@@ -250,6 +255,14 @@ const ChatList: React.FC<ChatListProps> = ({ currentUser, onOpenChat, apiKey, on
                  <p className="text-gray-500 text-xs uppercase tracking-wider font-semibold">{currentUser.status || 'Offline'}</p>
             </div>
         </div>
+        
+        {/* New Messages Indicator */}
+        {newMessagesIndicator && (
+          <div className="absolute top-2 right-2 flex items-center gap-2 animate-pulse">
+            <div className="w-2 h-2 bg-green-500 rounded-full animate-bounce"></div>
+            <span className="text-xs text-green-400 font-medium">New messages</span>
+          </div>
+        )}
         {!apiKey && (
             <button 
                 onClick={() => setShowKeyModal(true)}
@@ -331,6 +344,20 @@ const ChatList: React.FC<ChatListProps> = ({ currentUser, onOpenChat, apiKey, on
       <div className="flex-1 overflow-y-auto no-scrollbar space-y-1 mt-2">
         {loading ? (
            <div className="flex justify-center p-10"><div className="w-6 h-6 border-2 border-primary-500 border-t-transparent rounded-full animate-spin"></div></div>
+        ) : isError ? (
+          <div className="text-center p-10 opacity-50 flex flex-col items-center">
+            <div className="bg-dark-surface p-4 rounded-full mb-4">
+                <Icons.AlertTriangle size={32} className="text-red-500" />
+            </div>
+            <p className="text-sm font-medium text-red-400">Failed to load chats</p>
+            <p className="text-gray-500 text-xs mt-2">Please check your connection and try again</p>
+            <button 
+              onClick={() => window.location.reload()} 
+              className="mt-4 px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-xl text-sm font-medium transition-colors"
+            >
+              Retry
+            </button>
+          </div>
         ) : filteredChats.length === 0 ? (
           <div className="text-center p-10 opacity-50 flex flex-col items-center">
             <div className="bg-dark-surface p-4 rounded-full mb-4">
